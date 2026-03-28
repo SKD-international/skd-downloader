@@ -334,32 +334,17 @@ function startDownload(item) {
   renderQueueItem(item);
   updateStatus();
 
-  // Get current toolbar selections
+  // Get current toolbar selections and pass directly via IPC
+  // (don't save to config — that corrupts video settings during audio downloads)
   const quality = document.getElementById('qualitySelect').value;
   const format = document.getElementById('formatSelect').value;
-
-  // Temporarily update config for this download
-  const downloadConfig = { ...config };
-  if (item.mode === 'video') {
-    if (quality === 'highest') {
-      downloadConfig.videoQuality = 'highest';
-    } else {
-      downloadConfig.videoQuality = 'select';
-      downloadConfig.videoResolution = quality;
-    }
-    downloadConfig.videoFormat = format;
-  } else {
-    downloadConfig.audioFormat = format;
-    downloadConfig.audioBitrate = quality;
-  }
-
-  // Save temporarily so main process picks it up
-  window.api.saveConfig(downloadConfig);
 
   window.api.startDownload({
     id: item.id,
     url: item.url,
-    mode: item.mode
+    mode: item.mode,
+    quality,
+    format
   });
 }
 
@@ -400,20 +385,21 @@ function removeItem(id) {
 }
 
 // ── Render Queue ────────────────────────────────────
+const EMPTY_STATE_HTML = `<div class="empty-state" id="emptyState">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  <p>Paste a URL to get started</p>
+</div>`;
+
 function renderQueue() {
   const list = document.getElementById('queueList');
-  const empty = document.getElementById('emptyState');
 
   if (queue.length === 0) {
-    list.innerHTML = '';
-    list.appendChild(empty);
-    empty.style.display = 'flex';
+    list.innerHTML = EMPTY_STATE_HTML;
     updateStatus();
     updateDownloadButton();
     return;
   }
 
-  empty.style.display = 'none';
   list.innerHTML = queue.map(item => buildQueueItemHtml(item)).join('');
   attachQueueListeners();
   updateStatus();
@@ -464,7 +450,8 @@ function buildQueueItemHtml(item) {
         <button data-action="remove" data-id="${item.id}" title="Remove">&times;</button>`;
       break;
     case 'error':
-      statusHtml = `<span class="status-badge error" title="${item.error || 'Error'}">Error</span>`;
+      const errMsg = (item.error || 'Unknown error').replace(/^ERROR:\s*/i, '').substring(0, 80);
+      statusHtml = `<span class="status-badge error" title="${escapeHtml(item.error || 'Error')}">${escapeHtml(errMsg)}</span>`;
       actionsHtml = `<button data-action="remove" data-id="${item.id}">&times;</button>`;
       break;
   }

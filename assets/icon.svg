@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#0e0e1a"/>
+      <stop offset="100%" stop-color="#06060b"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#0070ff"/>
+    </linearGradient>
+    <linearGradient id="cyanFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0070ff" stop-opacity="0.4"/>
+    </linearGradient>
+    <filter id="glow1">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="roundRect">
+      <rect width="1024" height="1024" rx="228"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <g clip-path="url(#roundRect)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <!-- Subtle grid texture -->
+    <g opacity="0.04" stroke="#00c8ff" stroke-width="1">
+      <line x1="0" y1="256" x2="1024" y2="256"/>
+      <line x1="0" y1="512" x2="1024" y2="512"/>
+      <line x1="0" y1="768" x2="1024" y2="768"/>
+      <line x1="256" y1="0" x2="256" y2="1024"/>
+      <line x1="512" y1="0" x2="512" y2="1024"/>
+      <line x1="768" y1="0" x2="768" y2="1024"/>
+    </g>
+    <!-- Ambient glow behind arrow -->
+    <ellipse cx="512" cy="480" rx="280" ry="300" fill="#00c8ff" opacity="0.06"/>
+  </g>
+
+  <!-- Border -->
+  <rect x="3" y="3" width="1018" height="1018" rx="226" fill="none" stroke="#1a1a30" stroke-width="3"/>
+
+  <!-- Download arrow — bold geometric style -->
+  <g filter="url(#glow1)" transform="translate(512, 420)">
+    <!-- Shaft -->
+    <rect x="-52" y="-210" width="104" height="280" rx="12" fill="url(#cyan)"/>
+    <!-- Arrowhead -->
+    <path d="M-170,55 L0,245 L170,55 L105,55 L105,80 L-105,80 L-105,55 Z" fill="url(#cyan)"/>
+  </g>
+
+  <!-- Platform line -->
+  <g filter="url(#glow2)">
+    <rect x="240" y="710" width="544" height="36" rx="18" fill="url(#cyanFade)"/>
+  </g>
+
+  <!-- SKD lettermark -->
+  <text x="512" y="880" text-anchor="middle" font-family="'SF Pro Display', 'Helvetica Neue', system-ui, sans-serif" font-weight="800" font-size="120" fill="#e8e8f0" letter-spacing="20" opacity="0.95">SKD</text>
+</svg>

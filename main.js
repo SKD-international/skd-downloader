@@ -32,16 +32,16 @@ function getConfig() {
     videoQuality: 'highest',
     videoResolution: '1080',
     videoFormat: 'mp4',
-    audioFormat: 'mp3',
-    audioBitrate: '192',
+    audioFormat: 'm4a',
+    audioBitrate: '256',
     audioSamplerate: '44100',
     filenameTemplate: 'title',
     skipExisting: false,
     removeEmoji: false,
-    sponsorBlock: false,
+    sponsorBlock: true,
     embedSubtitles: false,
     subtitleLangs: 'en',
-    embedThumbnail: false,
+    embedThumbnail: true,
     saveThumbnail: false,
     writeTags: true,
     cookiesBrowser: 'none',
@@ -80,26 +80,38 @@ function addToHistory(entry) {
 }
 
 // ── yt-dlp helpers ──────────────────────────────────
-function findYtDlp() {
+function findBinary(name) {
   const locations = [
-    '/opt/homebrew/bin/yt-dlp',
-    '/usr/local/bin/yt-dlp',
-    '/usr/bin/yt-dlp',
-    'yt-dlp'
+    '/opt/homebrew/bin/' + name,
+    '/usr/local/bin/' + name,
+    '/usr/bin/' + name,
   ];
   for (const loc of locations) {
-    try {
-      require('child_process').execSync(`${loc} --version`, { stdio: 'ignore' });
-      return loc;
-    } catch {}
+    if (fs.existsSync(loc)) return loc;
   }
-  return 'yt-dlp';
+  return name; // fallback to PATH lookup
 }
 
-const YT_DLP = findYtDlp();
+let YT_DLP = null;
+let FFMPEG_DIR = null;
+
+function initBinaries() {
+  if (!YT_DLP) {
+    YT_DLP = findBinary('yt-dlp');
+    const ffmpegPath = findBinary('ffmpeg');
+    FFMPEG_DIR = ffmpegPath !== 'ffmpeg' ? path.dirname(ffmpegPath) : null;
+    console.log('[init] yt-dlp:', YT_DLP);
+    console.log('[init] ffmpeg:', FFMPEG_DIR);
+  }
+}
 
 function buildArgs(url, config, mode, formatId) {
   const args = ['--no-warnings', '--newline'];
+
+  // Point yt-dlp to bundled ffmpeg
+  if (FFMPEG_DIR) {
+    args.push('--ffmpeg-location', FFMPEG_DIR);
+  }
 
   // Progress template for parsing
   args.push('--progress-template', 'download:%(progress._percent_str)s %(progress._speed_str)s %(progress._eta_str)s');
@@ -125,11 +137,8 @@ function buildArgs(url, config, mode, formatId) {
     filenamePattern = '%(title)s.%(ext)s';
   }
 
+  // Simple output path — always works for both single videos and playlists
   args.push('-o', path.join(outputDir, filenamePattern));
-
-  if (config.createPlaylistSubfolder) {
-    args.push('-o', `playlist:${path.join(outputDir, '%(playlist_title)s', filenamePattern)}`);
-  }
 
   // Format selection
   if (mode === 'audio') {
@@ -138,18 +147,29 @@ function buildArgs(url, config, mode, formatId) {
     args.push('--audio-quality', config.audioBitrate ? `${config.audioBitrate}K` : '192K');
   } else if (formatId) {
     args.push('-f', formatId);
-  } else if (config.videoQuality === 'highest') {
-    args.push('-f', `bestvideo[ext=${config.videoFormat || 'mp4'}]+bestaudio/best[ext=${config.videoFormat || 'mp4'}]/bestvideo+bestaudio/best`);
-  } else if (config.videoQuality === 'lowest') {
-    args.push('-f', 'worstvideo+worstaudio/worst');
   } else {
-    const res = config.videoResolution || '1080';
-    args.push('-f', `bestvideo[height<=${res}][ext=${config.videoFormat || 'mp4'}]+bestaudio/best[height<=${res}]/bestvideo[height<=${res}]+bestaudio/best`);
-  }
+    const fmt = config.videoFormat || 'mp4';
 
-  // Merge to mp4 for video
-  if (mode === 'video') {
-    args.push('--merge-output-format', config.videoFormat || 'mp4');
+    // Use -S (format sorting) to prefer Mac-compatible codecs (h264+aac)
+    // instead of filtering by extension which fails when site doesn't have mp4 streams
+    if (config.videoQuality === 'highest') {
+      args.push('-f', 'bestvideo+bestaudio/best');
+    } else if (config.videoQuality === 'lowest') {
+      args.push('-f', 'worstvideo+worstaudio/worst');
+    } else {
+      const res = config.videoResolution || '1080';
+      args.push('-f', `bestvideo[height<=${res}]+bestaudio/best[height<=${res}]/best`);
+    }
+
+    // Prefer h264 video + aac audio — plays natively on Mac/iOS/Windows
+    // Falls back to other codecs if h264 not available, then remuxes into target container
+    if (fmt === 'mp4') {
+      args.push('-S', 'vcodec:h264,acodec:aac');
+    } else if (fmt === 'webm') {
+      args.push('-S', 'vcodec:vp9,acodec:opus');
+    }
+
+    args.push('--merge-output-format', fmt);
   }
 
   // SponsorBlock
@@ -235,6 +255,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  initBinaries();
   // Enable Cmd+C/V/X/A on macOS (Electron swallows them without a menu)
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -285,33 +306,44 @@ ipcMain.handle('select-folder', async () => {
 ipcMain.handle('paste-clipboard', () => clipboard.readText());
 
 ipcMain.handle('get-video-info', async (_, url) => {
-  return new Promise((resolve, reject) => {
-    const args = ['--dump-json', '--no-warnings', '--flat-playlist', url];
-    const config = getConfig();
-    if (config.cookiesBrowser && config.cookiesBrowser !== 'none') {
-      args.unshift('--cookies-from-browser', config.cookiesBrowser);
-    }
-    const proc = spawn(YT_DLP, args);
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', d => stdout += d.toString());
-    proc.stderr.on('data', d => stderr += d.toString());
-
-    proc.on('close', code => {
-      if (code !== 0) return reject(new Error(stderr || `yt-dlp exited with code ${code}`));
-      try {
-        // Handle playlists (multiple JSON objects)
-        const lines = stdout.trim().split('\n');
-        const entries = lines.map(l => JSON.parse(l));
-        resolve(entries.length === 1 ? entries[0] : entries);
-      } catch (e) {
-        reject(new Error('Failed to parse video info'));
+  function run(useCookies) {
+    return new Promise((resolve, reject) => {
+      const args = ['--dump-json', '--no-warnings', '--flat-playlist', url];
+      const config = getConfig();
+      if (useCookies && config.cookiesBrowser && config.cookiesBrowser !== 'none') {
+        args.unshift('--cookies-from-browser', config.cookiesBrowser);
       }
-    });
+      const proc = spawn(YT_DLP, args);
+      let stdout = '';
+      let stderr = '';
 
-    setTimeout(() => { proc.kill(); reject(new Error('Timeout')); }, 30000);
-  });
+      proc.stdout.on('data', d => stdout += d.toString());
+      proc.stderr.on('data', d => stderr += d.toString());
+
+      proc.on('close', code => {
+        if (code !== 0) return reject(new Error(stderr || `yt-dlp exited with code ${code}`));
+        try {
+          const lines = stdout.trim().split('\n');
+          const entries = lines.map(l => JSON.parse(l));
+          resolve(entries.length === 1 ? entries[0] : entries);
+        } catch (e) {
+          reject(new Error('Failed to parse video info'));
+        }
+      });
+
+      setTimeout(() => { proc.kill(); reject(new Error('Timeout')); }, 30000);
+    });
+  }
+
+  // Try with cookies first; if permission denied, retry without
+  try {
+    return await run(true);
+  } catch (e) {
+    if (e.message && e.message.includes('Operation not permitted')) {
+      return await run(false);
+    }
+    throw e;
+  }
 });
 
 ipcMain.handle('get-formats', async (_, url) => {
@@ -327,71 +359,96 @@ ipcMain.handle('get-formats', async (_, url) => {
   });
 });
 
-ipcMain.handle('start-download', (_, { id, url, mode, formatId }) => {
-  const config = getConfig();
-  const args = buildArgs(url, config, mode, formatId);
-
-  const proc = spawn(YT_DLP, args);
-  activeDownloads.set(id, proc);
-
-  let lastFilePath = '';
-
-  proc.stdout.on('data', data => {
-    const lines = data.toString().split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // Parse progress
-      const progressMatch = trimmed.match(/(\d+\.?\d*)%\s+(\S+)\s+(\S+)/);
-      if (progressMatch) {
-        mainWindow.webContents.send('download-progress', {
-          id,
-          percent: parseFloat(progressMatch[1]),
-          speed: progressMatch[2],
-          eta: progressMatch[3]
-        });
-      }
-
-      // Parse destination filename (multiple patterns)
-      const destMatch = trimmed.match(/\[download\] Destination: (.+)/) ||
-                        trimmed.match(/\[Merger\] Merging formats into "(.+)"/) ||
-                        trimmed.match(/\[ExtractAudio\] Destination: (.+)/) ||
-                        trimmed.match(/\[ffmpeg\] Destination: (.+)/);
-      if (destMatch) {
-        lastFilePath = destMatch[1].replace(/^"(.*)"$/, '$1');
-        mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
-      }
-
-      // Also catch "has already been downloaded"
-      const alreadyMatch = trimmed.match(/\[download\] (.+) has already been downloaded/);
-      if (alreadyMatch) {
-        lastFilePath = alreadyMatch[1];
-        mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
-      }
-
-      // Parse merge/extract
-      if (trimmed.includes('[Merger]') || trimmed.includes('[ExtractAudio]')) {
-        mainWindow.webContents.send('download-progress', { id, percent: 99, speed: '', eta: 'Processing...' });
-      }
+ipcMain.handle('start-download', (_, { id, url, mode, formatId, quality, format }) => {
+  function spawnDownload(withCookies) {
+    const config = getConfig();
+    if (!withCookies) {
+      config.cookiesBrowser = 'none';
     }
-  });
-
-  proc.stderr.on('data', data => {
-    const line = data.toString().trim();
-    if (line.includes('ERROR')) {
-      mainWindow.webContents.send('download-error', { id, error: line });
+    // Apply toolbar selections without persisting to config file
+    if (mode === 'video' && format) {
+      config.videoFormat = format;
+      if (quality === 'highest') {
+        config.videoQuality = 'highest';
+      } else if (quality) {
+        config.videoQuality = 'select';
+        config.videoResolution = quality;
+      }
+    } else if (mode === 'audio' && format) {
+      config.audioFormat = format;
+      if (quality) config.audioBitrate = quality;
     }
-  });
+    const args = buildArgs(url, config, mode, formatId);
+    console.log('[yt-dlp]', YT_DLP, args.join(' '));
 
-  proc.on('close', code => {
-    activeDownloads.delete(id);
-    if (code === 0) {
-      mainWindow.webContents.send('download-complete', { id });
-    } else {
-      mainWindow.webContents.send('download-error', { id, error: `Process exited with code ${code}` });
-    }
-  });
+    const proc = spawn(YT_DLP, args);
+    activeDownloads.set(id, proc);
+
+    let lastFilePath = '';
+    let stderrBuf = '';
+
+    proc.stdout.on('data', data => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Parse progress
+        const progressMatch = trimmed.match(/(\d+\.?\d*)%\s+(\S+)\s+(\S+)/);
+        if (progressMatch) {
+          mainWindow.webContents.send('download-progress', {
+            id,
+            percent: parseFloat(progressMatch[1]),
+            speed: progressMatch[2],
+            eta: progressMatch[3]
+          });
+        }
+
+        // Parse destination filename (multiple patterns)
+        const destMatch = trimmed.match(/\[download\] Destination: (.+)/) ||
+                          trimmed.match(/\[Merger\] Merging formats into "(.+)"/) ||
+                          trimmed.match(/\[ExtractAudio\] Destination: (.+)/) ||
+                          trimmed.match(/\[ffmpeg\] Destination: (.+)/);
+        if (destMatch) {
+          lastFilePath = destMatch[1].replace(/^"(.*)"$/, '$1');
+          mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
+        }
+
+        // Also catch "has already been downloaded"
+        const alreadyMatch = trimmed.match(/\[download\] (.+) has already been downloaded/);
+        if (alreadyMatch) {
+          lastFilePath = alreadyMatch[1];
+          mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
+        }
+
+        // Parse merge/extract
+        if (trimmed.includes('[Merger]') || trimmed.includes('[ExtractAudio]')) {
+          mainWindow.webContents.send('download-progress', { id, percent: 99, speed: '', eta: 'Processing...' });
+        }
+      }
+    });
+
+    proc.stderr.on('data', data => {
+      stderrBuf += data.toString();
+      console.log('[yt-dlp stderr]', data.toString().trim());
+    });
+
+    proc.on('close', code => {
+      console.log('[yt-dlp close]', { id, code, stderr: stderrBuf.trim().slice(0, 200) });
+      activeDownloads.delete(id);
+      if (code === 0) {
+        mainWindow.webContents.send('download-complete', { id });
+      } else if (withCookies && stderrBuf.includes('Operation not permitted')) {
+        // Cookie access denied by macOS — retry without cookies
+        spawnDownload(false);
+      } else {
+        const errorLine = stderrBuf.split('\n').find(l => l.includes('ERROR')) || stderrBuf.trim().split('\n').pop() || `yt-dlp exited with code ${code}`;
+        mainWindow.webContents.send('download-error', { id, error: errorLine.trim() });
+      }
+    });
+  }
+
+  spawnDownload(true);
 
   return true;
 });
@@ -431,7 +488,7 @@ ipcMain.handle('get-downloads-path', () => {
 
 ipcMain.handle('check-ytdlp', () => {
   try {
-    const version = require('child_process').execSync(`${YT_DLP} --version`).toString().trim();
+    const version = require('child_process').execSync(`"${YT_DLP}" --version`).toString().trim();
     return { installed: true, version, path: YT_DLP };
   } catch {
     return { installed: false };

@@ -1,19 +1,13 @@
 # SKD Downloader — Known Bugs to Fix
 
 ## Bug 1: Queue count doesn't reset after clearing
-**Status:** Partially fixed, needs verification
-**Problem:** When removing items or clearing queue, the "X items" count in the header sometimes persists.
-**Root cause:** Late-arriving IPC events (download-error, download-complete) from killed yt-dlp processes call `renderQueueItem` → `updateStatus()` which re-renders the count after it was cleared.
-**Fix applied:** Added guard in `renderQueueItem` to skip if item no longer in queue array. Needs testing.
+**Status:** Fixed
+**Fix:** Guards in all IPC listeners (`onDownloadProgress`, `onDownloadComplete`, `onDownloadError`, `onDownloadDestination`) check `queue.find()` and return early if item was removed. `renderQueueItem` has a duplicate guard. Late IPC events from killed yt-dlp processes are silently ignored.
 
-## Bug 2: Downloads show "Error" status
-**Status:** Needs investigation
-**Problem:** Downloads fail with Error badge. Need to check yt-dlp stderr output.
-**Likely causes:**
-- Format selection args might be too strict (e.g., `bestvideo[ext=mp4]` fails when mp4 isn't available)
-- Download folder might not exist
-- yt-dlp version mismatch with flags used
-**To debug:** Open DevTools (Cmd+Option+I) and check Console for error messages.
+## Bug 2: Downloads show "Error" / open as WebM
+**Status:** Fixed
+**Problem:** Format selection filtered by `ext=mp4` which fails when sites don't serve mp4 streams. Fell through to webm/AV1 which macOS can't play.
+**Fix:** Replaced ext-based filtering with yt-dlp `-S "vcodec:h264,acodec:aac"` format sorting. Prefers H.264+AAC (universal playback) and `--merge-output-format mp4` ensures mp4 container. Also improved error reporting — stderr is buffered and actual error shown in UI badge.
 
 ## Bug 3: Open folder button
 **Status:** Fixed
@@ -51,9 +45,9 @@
 3. Progress parsed from stdout, errors from stderr
 4. File path captured from `[download] Destination:` and `[Merger] Merging formats into` output
 
-### Key fix needed in format selection (main.js buildArgs):
-The format string `bestvideo[ext=mp4]+bestaudio/best[ext=mp4]` is too strict.
-Should fallback more gracefully:
+### Format selection (main.js buildArgs):
+Uses yt-dlp `-S` (format sorting) instead of ext-based filtering:
 ```
-bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best
+-f "bestvideo+bestaudio/best" -S "vcodec:h264,acodec:aac" --merge-output-format mp4
 ```
+Prefers H.264+AAC for universal playback. Falls back to other codecs if unavailable.
