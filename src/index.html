@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SKD Downloader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Drag region for frameless window -->
+  <div class="titlebar">
+    <div class="titlebar-drag"></div>
+    <span class="titlebar-title">SKD Downloader</span>
+    <div class="titlebar-version" id="ytdlpVersion"></div>
+  </div>
+
+  <!-- First Launch Overlay -->
+  <div class="overlay" id="firstLaunchOverlay" style="display:none">
+    <div class="modal first-launch-modal">
+      <div class="modal-glow"></div>
+      <h2>Welcome to SKD Downloader</h2>
+      <p>Choose where to save your downloads:</p>
+      <div class="folder-pick">
+        <div class="folder-row">
+          <label>Video folder</label>
+          <button class="btn-folder" id="pickVideoFolder">Choose folder...</button>
+        </div>
+        <div class="folder-row">
+          <label>Audio folder</label>
+          <button class="btn-folder" id="pickAudioFolder">Choose folder...</button>
+        </div>
+      </div>
+      <button class="btn-primary btn-large" id="firstLaunchDone">Let's Go</button>
+    </div>
+  </div>
+
+  <!-- Settings Overlay -->
+  <div class="overlay" id="settingsOverlay" style="display:none">
+    <div class="modal settings-modal">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="btn-close" id="closeSettings">&times;</button>
+      </div>
+      <div class="settings-tabs">
+        <button class="tab active" data-tab="general">General</button>
+        <button class="tab" data-tab="downloads">Downloads</button>
+        <button class="tab" data-tab="network">Network</button>
+        <button class="tab" data-tab="audio">Audio</button>
+        <button class="tab" data-tab="video">Video</button>
+        <button class="tab" data-tab="tags">Tags</button>
+        <button class="tab" data-tab="auth">Auth</button>
+      </div>
+      <div class="settings-content">
+        <!-- General -->
+        <div class="tab-panel active" id="tab-general">
+          <div class="setting-group">
+            <label class="setting-label">Automation</label>
+            <div class="setting-row">
+              <label class="toggle-label"><input type="checkbox" id="s-autoClipboard"> Add links from clipboard automatically</label>
+            </div>
+            <div class="setting-row">
+              <label class="toggle-label"><input type="checkbox" id="s-autoStart"> Start downloading automatically</label>
+            </div>
+            <div class="setting-row">
+              <label class="toggle-label"><input type="checkbox" id="s-autoRemoveCompleted"> Remove completed automatically</label>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Notifications</label>
+            <div class="setting-row">
+              <label class="toggle-label"><input type="checkbox" id="s-notifStarted"> When download starts</label>
+            </div>
+            <div class="setting-row">
+              <label class="toggle-label"><input type="checkbox" id="s-notifCompleted"> When download completes</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Downloads -->
+        <div class="tab-panel" id="tab-downloads">
+          <div class="setting-group">
+            <label class="setting-label">Concurrent downloads</label>
+            <div class="setting-row">
+              <input type="range" id="s-concurrent" min="1" max="10" value="3" class="slider">
+              <span class="slider-val" id="s-concurrentVal">3</span>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Video quality</label>
+            <div class="setting-row radio-group">
+              <label><input type="radio" name="quality" value="highest" checked> Highest available</label>
+              <label><input type="radio" name="quality" value="select"> Select resolution:
+                <select id="s-resolution" class="select-sm">
+                  <option value="2160">4K (2160p)</option>
+                  <option value="1440">1440p</option>
+                  <option value="1080" selected>1080p</option>
+                  <option value="720">720p</option>
+                  <option value="480">480p</option>
+                  <option value="360">360p</option>
+                </select>
+              </label>
+              <label><input type="radio" name="quality" value="lowest"> Lowest available</label>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Download folder for video</label>
+            <div class="setting-row folder-input">
+              <input type="text" id="s-videoFolder" class="input" readonly>
+              <button class="btn-sm" id="s-videoFolderBtn">Browse</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Download folder for audio</label>
+            <div class="setting-row folder-input">
+              <input type="text" id="s-audioFolder" class="input" readonly>
+              <button class="btn-sm" id="s-audioFolderBtn">Browse</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-playlistSubfolder"> Create subfolder for playlists</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-preventSleep"> Prevent sleep during downloads</label>
+          </div>
+        </div>
+
+        <!-- Network -->
+        <div class="tab-panel" id="tab-network">
+          <div class="setting-group">
+            <label class="setting-label">Bandwidth limit (KB/s, 0 = unlimited)</label>
+            <div class="setting-row">
+              <input type="number" id="s-bandwidth" class="input input-number" min="0" value="0">
+              <span class="unit">KB/s</span>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Proxy server</label>
+            <div class="setting-row">
+              <input type="text" id="s-proxy" class="input" placeholder="socks5://127.0.0.1:1080">
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio -->
+        <div class="tab-panel" id="tab-audio">
+          <div class="setting-group">
+            <label class="setting-label">Filename template</label>
+            <div class="setting-row">
+              <select id="s-filenameAudio" class="select">
+                <option value="title">Video Title</option>
+                <option value="artist-title">Artist - Title</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Output format</label>
+            <div class="setting-row radio-group">
+              <label><input type="radio" name="audioFmt" value="mp3" checked> MP3</label>
+              <label><input type="radio" name="audioFmt" value="m4a"> M4A</label>
+              <label><input type="radio" name="audioFmt" value="flac"> FLAC</label>
+              <label><input type="radio" name="audioFmt" value="wav"> WAV</label>
+              <label><input type="radio" name="audioFmt" value="opus"> Opus</label>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Bitrate</label>
+            <div class="setting-row">
+              <select id="s-bitrate" class="select">
+                <option value="128">128 Kbps</option>
+                <option value="192" selected>192 Kbps</option>
+                <option value="256">256 Kbps</option>
+                <option value="320">320 Kbps</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Sample rate</label>
+            <div class="setting-row">
+              <select id="s-samplerate" class="select">
+                <option value="44100" selected>44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-skipExistingAudio"> Skip if file already exists</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-removeEmojiAudio"> Remove emoji from filename</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-sponsorBlockAudio"> Remove sponsors (SponsorBlock)</label>
+          </div>
+        </div>
+
+        <!-- Video -->
+        <div class="tab-panel" id="tab-video">
+          <div class="setting-group">
+            <label class="setting-label">Filename template</label>
+            <div class="setting-row">
+              <select id="s-filenameVideo" class="select">
+                <option value="title" selected>Video Title</option>
+                <option value="artist-title">Artist - Title</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Container format</label>
+            <div class="setting-row radio-group">
+              <label><input type="radio" name="videoFmt" value="mp4" checked> MP4</label>
+              <label><input type="radio" name="videoFmt" value="mkv"> MKV</label>
+              <label><input type="radio" name="videoFmt" value="webm"> WebM</label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-skipExistingVideo"> Skip if file already exists</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-removeEmojiVideo"> Remove emoji from filename</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-embedSubs"> Embed subtitles</label>
+          </div>
+          <div class="setting-group sub-setting" id="subsLangGroup" style="display:none">
+            <label class="setting-label">Subtitle languages</label>
+            <input type="text" id="s-subLangs" class="input" placeholder="en,es,de" value="en">
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-sponsorBlockVideo"> Remove sponsors (SponsorBlock)</label>
+          </div>
+          <div class="setting-group">
+            <label class="setting-label">Thumbnail</label>
+            <div class="setting-row radio-group">
+              <label><input type="radio" name="thumb" value="none" checked> Don't download</label>
+              <label><input type="radio" name="thumb" value="embed"> Embed in file</label>
+              <label><input type="radio" name="thumb" value="save"> Save separately</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="tab-panel" id="tab-tags">
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-writeTags" checked> Write metadata tags (audio)</label>
+          </div>
+          <div class="setting-row">
+            <label class="toggle-label"><input type="checkbox" id="s-embedThumb"> Embed thumbnail as cover art</label>
+          </div>
+        </div>
+
+        <!-- Auth -->
+        <div class="tab-panel" id="tab-auth">
+          <div class="setting-group">
+            <label class="setting-label">Browser cookies</label>
+            <p class="setting-hint">Import cookies from your browser to access age-restricted or private content. Works for all 1000+ supported sites.</p>
+            <div class="setting-row">
+              <select id="s-cookies" class="select">
+                <option value="none">None</option>
+                <option value="safari">Safari</option>
+                <option value="chrome">Chrome</option>
+                <option value="firefox">Firefox</option>
+                <option value="edge">Edge</option>
+                <option value="brave">Brave</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="settingsCancel">Cancel</button>
+        <button class="btn-primary" id="settingsSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Overlay -->
+  <div class="overlay" id="historyOverlay" style="display:none">
+    <div class="modal history-modal">
+      <div class="modal-header">
+        <h2>Download History</h2>
+        <button class="btn-close" id="closeHistory">&times;</button>
+      </div>
+      <div class="history-toolbar">
+        <input type="text" class="input" id="historySearch" placeholder="Search history...">
+        <button class="btn-danger-sm" id="clearHistory">Clear All</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main>
+    <!-- URL Input Section -->
+    <div class="input-section">
+      <div class="url-row">
+        <input type="text" class="url-input" id="urlInput" placeholder="Paste a video or playlist URL..." spellcheck="false">
+        <button class="btn-icon" id="pasteBtn" title="Paste from clipboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </button>
+        <button class="btn-icon btn-add" id="addBtn" title="Add URL">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="controls-row">
+        <div class="mode-toggle" id="modeToggle">
+          <button class="mode-btn active" data-mode="video">Video</button>
+          <button class="mode-btn" data-mode="audio">Audio</button>
+          <div class="mode-slider"></div>
+        </div>
+        <select class="select-control" id="qualitySelect">
+          <option value="highest">Best Quality</option>
+          <option value="2160">4K</option>
+          <option value="1440">1440p</option>
+          <option value="1080" selected>1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+        </select>
+        <select class="select-control" id="formatSelect">
+          <option value="mp4">MP4</option>
+          <option value="mkv">MKV</option>
+          <option value="webm">WebM</option>
+        </select>
+        <div class="controls-spacer"></div>
+        <button class="btn-icon-sm" id="historyBtn" title="History">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+        <button class="btn-icon-sm" id="settingsBtn" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Download Button -->
+    <button class="download-btn" id="downloadAllBtn" disabled>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span>DOWNLOAD ALL</span>
+    </button>
+
+    <!-- Queue -->
+    <div class="queue-section">
+      <div class="queue-header">
+        <span class="queue-title">Queue</span>
+        <span class="queue-count" id="queueCount">0 items</span>
+      </div>
+      <div class="queue-list" id="queueList">
+        <div class="empty-state" id="emptyState">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <p>Paste a URL to get started</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Status Bar -->
+  <footer class="statusbar">
+    <span id="statusText">Ready</span>
+    <span id="statusFolder" class="status-folder"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

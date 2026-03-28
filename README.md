@@ -1,0 +1,52 @@
+# SKD Downloader
+
+A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in replacement for MediaHuman YouTube Downloader.
+
+## Features
+
+- **1000+ sites** — YouTube, TikTok, Instagram, Reddit, Twitter, Vimeo, and more
+- **Video & Audio** — Download video or extract audio with one toggle
+- **Quality control** — Pick resolution (4K to 360p) or bitrate (320 to 128 Kbps)
+- **Playlist support** — Auto-detects and downloads entire playlists
+- **Batch downloads** — Paste multiple URLs at once
+- **SponsorBlock** — Auto-remove sponsor segments
+- **Subtitles** — Download and embed subtitles
+- **Download history** — Searchable log of past downloads
+- **Dark theme** — Premium dark cinematic UI
+- **Cross-platform** — Mac and Windows
+
+## Install
+
+### macOS (Homebrew)
+
+```bash
+brew install --cask skd-downloader
+```
+
+### From source
+
+```bash
+git clone https://github.com/Bonchaloo/skd-downloader.git
+cd skd-downloader
+npm install
+npm start
+```
+
+### Prerequisites
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) must be installed: `brew install yt-dlp`
+- [ffmpeg](https://ffmpeg.org/) recommended for format conversion: `brew install ffmpeg`
+
+## Build
+
+```bash
+# Mac
+npm run dist:mac
+
+# Windows
+npm run dist:win
+```
+
+## License
+
+MIT
