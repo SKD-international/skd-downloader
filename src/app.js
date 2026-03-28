@@ -127,6 +127,9 @@ function setupListeners() {
     if (folder) window.api.openFile(folder);
   });
 
+  // Clear queue
+  document.getElementById('clearQueueBtn').addEventListener('click', clearQueue);
+
   // Close overlays on background click
   document.querySelectorAll('.overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
@@ -370,10 +373,24 @@ function startNextInQueue() {
 }
 
 function cancelDownload(id) {
-  window.api.cancelDownload(id);
+  // Always remove from queue — even if process is already dead
+  window.api.cancelDownload(id).catch(() => {});
   queue = queue.filter(q => q.id !== id);
   renderQueue();
   updateDownloadButton();
+}
+
+function clearQueue() {
+  // Kill all active downloads
+  for (const item of queue) {
+    if (item.status === 'downloading') {
+      window.api.cancelDownload(item.id).catch(() => {});
+    }
+  }
+  queue = [];
+  renderQueue();
+  updateDownloadButton();
+  setStatus('Queue cleared');
 }
 
 function removeItem(id) {
@@ -391,6 +408,8 @@ function renderQueue() {
     list.innerHTML = '';
     list.appendChild(empty);
     empty.style.display = 'flex';
+    updateStatus();
+    updateDownloadButton();
     return;
   }
 
@@ -401,6 +420,8 @@ function renderQueue() {
 }
 
 function renderQueueItem(item) {
+  // Don't update if item was already removed from queue
+  if (!queue.find(q => q.id === item.id)) return;
   const existing = document.querySelector(`[data-id="${item.id}"]`);
   if (existing) {
     existing.outerHTML = buildQueueItemHtml(item);
@@ -463,18 +484,23 @@ function buildQueueItemHtml(item) {
     </div>`;
 }
 
+// Use event delegation — one listener on queueList, never stacks
+let queueDelegationSetup = false;
 function attachQueueListeners() {
-  document.querySelectorAll('.queue-actions button').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-      if (action === 'cancel') cancelDownload(id);
-      else if (action === 'remove') removeItem(id);
-      else if (action === 'open') {
-        const item = queue.find(q => q.id === id);
-        if (item?.filePath) window.api.openFile(item.filePath);
-      }
-    });
+  if (queueDelegationSetup) return;
+  queueDelegationSetup = true;
+
+  document.getElementById('queueList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    if (action === 'cancel') cancelDownload(id);
+    else if (action === 'remove') removeItem(id);
+    else if (action === 'open') {
+      const item = queue.find(q => q.id === id);
+      if (item?.filePath) window.api.openFile(item.filePath);
+    }
   });
 }
 
@@ -501,8 +527,8 @@ function setupSettings() {
 
   document.getElementById('firstLaunchDone').addEventListener('click', async () => {
     if (!config.downloadFolderVideo) {
-      // Default to ~/Downloads/SKD Downloader
-      const downloads = '~/Downloads/SKD Downloader';
+      // Default to ~/Downloads/SKD Downloader (resolved full path)
+      const downloads = await window.api.getDownloadsPath();
       config.downloadFolderVideo = downloads;
       config.downloadFolderAudio = downloads;
     }
@@ -691,13 +717,15 @@ function updateStatus() {
   const completed = queue.filter(q => q.status === 'completed').length;
   const total = queue.length;
 
-  if (downloading > 0) {
+  if (total === 0) {
+    setStatus('Ready');
+  } else if (downloading > 0) {
     setStatus(`Downloading ${downloading} of ${total}`);
   } else if (completed === total && total > 0) {
     setStatus(`All ${total} downloads complete`);
   }
 
-  document.getElementById('queueCount').textContent = `${total} item${total !== 1 ? 's' : ''}`;
+  document.getElementById('queueCount').textContent = total === 0 ? '' : `${total} item${total !== 1 ? 's' : ''}`;
 }
 
 function updateDownloadButton() {
@@ -711,6 +739,10 @@ function updateDownloadButton() {
   } else {
     span.textContent = 'DOWNLOAD ALL';
   }
+
+  // Show/hide clear button
+  const clearBtn = document.getElementById('clearQueueBtn');
+  clearBtn.style.display = queue.length > 0 ? 'block' : 'none';
 }
 
 // ── Start ───────────────────────────────────────────

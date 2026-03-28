@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -106,7 +106,15 @@ function buildArgs(url, config, mode, formatId) {
 
   // Output template
   let outputDir = mode === 'audio' ? config.downloadFolderAudio : config.downloadFolderVideo;
+  // Resolve ~ to actual home directory
+  if (outputDir && outputDir.startsWith('~')) {
+    outputDir = outputDir.replace('~', app.getPath('home'));
+  }
   if (!outputDir) outputDir = path.join(app.getPath('downloads'), 'SKD Downloader');
+  // Ensure directory exists
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
 
   let filenamePattern;
   if (config.filenameTemplate === 'title') {
@@ -226,7 +234,34 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Enable Cmd+C/V/X/A on macOS (Electron swallows them without a menu)
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' }
+        ]
+      }
+    ]));
+  }
+  createWindow();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -299,29 +334,46 @@ ipcMain.handle('start-download', (_, { id, url, mode, formatId }) => {
   const proc = spawn(YT_DLP, args);
   activeDownloads.set(id, proc);
 
+  let lastFilePath = '';
+
   proc.stdout.on('data', data => {
-    const line = data.toString().trim();
+    const lines = data.toString().split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-    // Parse progress
-    const progressMatch = line.match(/(\d+\.?\d*)%\s+(\S+)\s+(\S+)/);
-    if (progressMatch) {
-      mainWindow.webContents.send('download-progress', {
-        id,
-        percent: parseFloat(progressMatch[1]),
-        speed: progressMatch[2],
-        eta: progressMatch[3]
-      });
-    }
+      // Parse progress
+      const progressMatch = trimmed.match(/(\d+\.?\d*)%\s+(\S+)\s+(\S+)/);
+      if (progressMatch) {
+        mainWindow.webContents.send('download-progress', {
+          id,
+          percent: parseFloat(progressMatch[1]),
+          speed: progressMatch[2],
+          eta: progressMatch[3]
+        });
+      }
 
-    // Parse destination filename
-    const destMatch = line.match(/\[download\] Destination: (.+)/);
-    if (destMatch) {
-      mainWindow.webContents.send('download-destination', { id, path: destMatch[1] });
-    }
+      // Parse destination filename (multiple patterns)
+      const destMatch = trimmed.match(/\[download\] Destination: (.+)/) ||
+                        trimmed.match(/\[Merger\] Merging formats into "(.+)"/) ||
+                        trimmed.match(/\[ExtractAudio\] Destination: (.+)/) ||
+                        trimmed.match(/\[ffmpeg\] Destination: (.+)/);
+      if (destMatch) {
+        lastFilePath = destMatch[1].replace(/^"(.*)"$/, '$1');
+        mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
+      }
 
-    // Parse merge
-    if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
-      mainWindow.webContents.send('download-progress', { id, percent: 99, speed: '', eta: 'Processing...' });
+      // Also catch "has already been downloaded"
+      const alreadyMatch = trimmed.match(/\[download\] (.+) has already been downloaded/);
+      if (alreadyMatch) {
+        lastFilePath = alreadyMatch[1];
+        mainWindow.webContents.send('download-destination', { id, path: lastFilePath });
+      }
+
+      // Parse merge/extract
+      if (trimmed.includes('[Merger]') || trimmed.includes('[ExtractAudio]')) {
+        mainWindow.webContents.send('download-progress', { id, percent: 99, speed: '', eta: 'Processing...' });
+      }
     }
   });
 
@@ -371,6 +423,10 @@ ipcMain.handle('open-file', (_, filePath) => {
 
 ipcMain.handle('open-url', (_, url) => {
   shell.openExternal(url);
+});
+
+ipcMain.handle('get-downloads-path', () => {
+  return path.join(app.getPath('downloads'), 'SKD Downloader');
 });
 
 ipcMain.handle('check-ytdlp', () => {

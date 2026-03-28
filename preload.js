@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   addToHistory: (entry) => ipcRenderer.invoke('add-to-history', entry),
   openFile: (path) => ipcRenderer.invoke('open-file', path),
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
+  getDownloadsPath: () => ipcRenderer.invoke('get-downloads-path'),
   checkYtDlp: () => ipcRenderer.invoke('check-ytdlp'),
 
   // Events from main process
