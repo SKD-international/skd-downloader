@@ -8,6 +8,7 @@ cask "skd-downloader" do
   homepage "https://github.com/Bonchaloo/skd-downloader"
 
   depends_on formula: "yt-dlp"
+  depends_on formula: "ffmpeg"
 
   app "SKD Downloader.app"
 
