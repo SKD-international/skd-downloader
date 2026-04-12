@@ -81,11 +81,29 @@ function addToHistory(entry) {
 
 // ── yt-dlp helpers ──────────────────────────────────
 function findBinary(name) {
-  const locations = [
-    '/opt/homebrew/bin/' + name,
-    '/usr/local/bin/' + name,
-    '/usr/bin/' + name,
-  ];
+  const locations = [];
+
+  if (app.isPackaged) {
+    locations.push(path.join(process.resourcesPath, 'bin', name));
+  }
+  locations.push(path.join(__dirname, 'bin', name));
+
+  if (name === 'yt-dlp') {
+    locations.push(
+      '/opt/homebrew/bin/yt-dlp-nightly',
+      '/usr/local/bin/yt-dlp-nightly',
+      '/opt/homebrew/bin/yt-dlp',
+      '/usr/local/bin/yt-dlp',
+      '/usr/bin/yt-dlp'
+    );
+  } else {
+    locations.push(
+      '/opt/homebrew/bin/' + name,
+      '/usr/local/bin/' + name,
+      '/usr/bin/' + name
+    );
+  }
+
   for (const loc of locations) {
     if (fs.existsSync(loc)) return loc;
   }
@@ -199,6 +217,8 @@ function buildArgs(url, config, mode, formatId) {
   // Cookies
   if (config.cookiesBrowser && config.cookiesBrowser !== 'none') {
     args.push('--cookies-from-browser', config.cookiesBrowser);
+  } else {
+    args.push('--no-cookies-from-browser');
   }
 
   // Bandwidth
@@ -312,6 +332,8 @@ ipcMain.handle('get-video-info', async (_, url) => {
       const config = getConfig();
       if (useCookies && config.cookiesBrowser && config.cookiesBrowser !== 'none') {
         args.unshift('--cookies-from-browser', config.cookiesBrowser);
+      } else {
+        args.unshift('--no-cookies-from-browser');
       }
       const proc = spawn(YT_DLP, args);
       let stdout = '';
@@ -348,7 +370,15 @@ ipcMain.handle('get-video-info', async (_, url) => {
 
 ipcMain.handle('get-formats', async (_, url) => {
   return new Promise((resolve, reject) => {
-    const proc = spawn(YT_DLP, ['-F', '--no-warnings', url]);
+    const config = getConfig();
+    const args = ['-F', '--no-warnings'];
+    if (config.cookiesBrowser && config.cookiesBrowser !== 'none') {
+      args.push('--cookies-from-browser', config.cookiesBrowser);
+    } else {
+      args.push('--no-cookies-from-browser');
+    }
+    args.push(url);
+    const proc = spawn(YT_DLP, args);
     let stdout = '';
     proc.stdout.on('data', d => stdout += d.toString());
     proc.on('close', code => {
@@ -488,7 +518,13 @@ ipcMain.handle('get-downloads-path', () => {
 
 ipcMain.handle('check-ytdlp', () => {
   try {
-    const version = require('child_process').execSync(`"${YT_DLP}" --version`).toString().trim();
+    const result = require('child_process').spawnSync(YT_DLP, ['--version'], {
+      encoding: 'utf-8'
+    });
+    if (result.status !== 0) {
+      throw new Error(result.stderr || 'yt-dlp version check failed');
+    }
+    const version = result.stdout.toString().trim();
     return { installed: true, version, path: YT_DLP };
   } catch {
     return { installed: false };

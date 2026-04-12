@@ -1,0 +1,13 @@
+#!/bin/bash
+if [ -n "${HOME:-}" ] && [ -f "$HOME/skd-nexus/scripts/ensure_yt_dlp.py" ]; then
+  exec python3 "$HOME/skd-nexus/scripts/ensure_yt_dlp.py" "$@"
+fi
+
+# Prefer the self-healing nightly launcher when available
+for cmd in "$HOME/.local/bin/yt-dlp-nightly" /opt/homebrew/bin/yt-dlp-nightly /usr/local/bin/yt-dlp-nightly /opt/homebrew/bin/yt-dlp /usr/local/bin/yt-dlp; do
+  if [ -x "$cmd" ]; then
+    exec "$cmd" "$@"
+  fi
+done
+echo "ERROR: yt-dlp not found. Install with: brew install yt-dlp" >&2
+exit 1
