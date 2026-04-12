@@ -1,0 +1,7 @@
+#!/bin/bash
+for cmd in /opt/homebrew/bin/ffprobe /usr/local/bin/ffprobe; do
+  if [ -x "$cmd" ]; then
+    exec "$cmd" "$@"
+  fi
+done
+exit 1

@@ -1,0 +1,8 @@
+#!/bin/bash
+for cmd in /opt/homebrew/bin/ffmpeg /usr/local/bin/ffmpeg; do
+  if [ -x "$cmd" ]; then
+    exec "$cmd" "$@"
+  fi
+done
+echo "ERROR: ffmpeg not found. Install with: brew install ffmpeg" >&2
+exit 1
