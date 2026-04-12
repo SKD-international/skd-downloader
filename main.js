@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard, shell, nativeTheme
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { detectDefaultCookiesBrowser, normalizeCookiesConfig, getCookieArgs } = require('./lib/yt-dlp-config');
 
 let mainWindow;
 const activeDownloads = new Map();
@@ -10,20 +11,15 @@ const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 const HISTORY_PATH = path.join(app.getPath('userData'), 'history.json');
 
 // ── Config ──────────────────────────────────────────
-function loadConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-  } catch {
-    return null;
-  }
+function getRuntimeEnv() {
+  return {
+    homeDir: app.getPath('home'),
+    platform: process.platform
+  };
 }
 
-function saveConfig(config) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-}
-
-function getConfig() {
-  return loadConfig() || {
+function getDefaultConfig() {
+  return {
     downloadFolderVideo: '',
     downloadFolderAudio: '',
     concurrentDownloads: 3,
@@ -44,7 +40,8 @@ function getConfig() {
     embedThumbnail: true,
     saveThumbnail: false,
     writeTags: true,
-    cookiesBrowser: 'none',
+    cookiesBrowser: detectDefaultCookiesBrowser(getRuntimeEnv()),
+    cookiesBrowserConfigured: false,
     proxy: '',
     autoClipboard: false,
     autoStart: false,
@@ -53,6 +50,36 @@ function getConfig() {
     notifications: { added: false, started: true, completed: true },
     firstLaunch: true
   };
+}
+
+function loadConfig() {
+  try {
+    const stored = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    const normalized = normalizeCookiesConfig(stored, getRuntimeEnv());
+
+    if (JSON.stringify(stored) !== JSON.stringify(normalized)) {
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2));
+    }
+
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+function saveConfig(config, { markCookiesConfigured = false } = {}) {
+  const normalized = normalizeCookiesConfig(config, getRuntimeEnv());
+
+  if (markCookiesConfigured) {
+    normalized.cookiesBrowserConfigured = true;
+  }
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2));
+  return normalized;
+}
+
+function getConfig() {
+  return loadConfig() || getDefaultConfig();
 }
 
 // ── History ─────────────────────────────────────────
@@ -215,11 +242,7 @@ function buildArgs(url, config, mode, formatId) {
   }
 
   // Cookies
-  if (config.cookiesBrowser && config.cookiesBrowser !== 'none') {
-    args.push('--cookies-from-browser', config.cookiesBrowser);
-  } else {
-    args.push('--no-cookies-from-browser');
-  }
+  args.push(...getCookieArgs(url, config, getRuntimeEnv()));
 
   // Bandwidth
   if (config.bandwidthLimit > 0) {
@@ -311,7 +334,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 ipcMain.handle('get-config', () => getConfig());
 
 ipcMain.handle('save-config', (_, config) => {
-  saveConfig(config);
+  saveConfig(config, { markCookiesConfigured: true });
   return true;
 });
 
@@ -330,11 +353,8 @@ ipcMain.handle('get-video-info', async (_, url) => {
     return new Promise((resolve, reject) => {
       const args = ['--dump-json', '--no-warnings', '--flat-playlist', url];
       const config = getConfig();
-      if (useCookies && config.cookiesBrowser && config.cookiesBrowser !== 'none') {
-        args.unshift('--cookies-from-browser', config.cookiesBrowser);
-      } else {
-        args.unshift('--no-cookies-from-browser');
-      }
+      const cookieConfig = useCookies ? config : { ...config, cookiesBrowser: 'none', cookiesBrowserConfigured: true };
+      args.unshift(...getCookieArgs(url, cookieConfig, getRuntimeEnv()));
       const proc = spawn(YT_DLP, args);
       let stdout = '';
       let stderr = '';
@@ -372,11 +392,7 @@ ipcMain.handle('get-formats', async (_, url) => {
   return new Promise((resolve, reject) => {
     const config = getConfig();
     const args = ['-F', '--no-warnings'];
-    if (config.cookiesBrowser && config.cookiesBrowser !== 'none') {
-      args.push('--cookies-from-browser', config.cookiesBrowser);
-    } else {
-      args.push('--no-cookies-from-browser');
-    }
+    args.push(...getCookieArgs(url, config, getRuntimeEnv()));
     args.push(url);
     const proc = spawn(YT_DLP, args);
     let stdout = '';
@@ -394,6 +410,7 @@ ipcMain.handle('start-download', (_, { id, url, mode, formatId, quality, format 
     const config = getConfig();
     if (!withCookies) {
       config.cookiesBrowser = 'none';
+      config.cookiesBrowserConfigured = true;
     }
     // Apply toolbar selections without persisting to config file
     if (mode === 'video' && format) {

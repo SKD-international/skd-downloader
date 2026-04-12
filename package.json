@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
@@ -34,6 +35,7 @@
     },
     "files": [
       "main.js",
+      "lib/**/*",
       "preload.js",
       "src/**/*",
       "assets/**/*"
