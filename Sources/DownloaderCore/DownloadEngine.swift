@@ -132,16 +132,21 @@ public final class YTDLPEngine: @unchecked Sendable {
     public init() {}
 
     public func checkInstallation() async -> BinaryStatus {
-        guard let binary = BinaryLocator.locate("yt-dlp") else {
-            return BinaryStatus(installed: false, version: "Not installed", path: "")
-        }
-
-        let result = await run(arguments: ["--version"], executable: binary)
+        let status = await checkTool(id: "yt-dlp", name: "yt-dlp", arguments: ["--version"], required: true)
         return BinaryStatus(
-            installed: result.exitCode == 0,
-            version: result.output.isEmpty ? "Unavailable" : result.output,
-            path: binary.path
+            installed: status.isUsable,
+            version: status.version,
+            path: status.path
         )
+    }
+
+    public func checkToolchain() async -> EngineHealthReport {
+        async let ytdlp = checkTool(id: "yt-dlp", name: "yt-dlp", arguments: ["--version"], required: true)
+        async let ffmpeg = checkTool(id: "ffmpeg", name: "ffmpeg", arguments: ["-version"], required: true)
+        async let ffprobe = checkTool(id: "ffprobe", name: "ffprobe", arguments: ["-version"], required: true)
+        async let brew = checkTool(id: "brew", name: "Homebrew", arguments: ["--version"], required: false)
+
+        return await EngineHealthReport(tools: [ytdlp, ffmpeg, ffprobe, brew])
     }
 
     public func fetchInfo(url: String, configuration: DownloadConfiguration) async throws -> [VideoInfo] {
@@ -262,6 +267,34 @@ public final class YTDLPEngine: @unchecked Sendable {
         await run(arguments: arguments, executable: executable, cancellationToken: nil, onLine: { _ in })
     }
 
+    private func checkTool(id: String, name: String, arguments: [String], required: Bool) async -> EngineToolStatus {
+        guard let binary = BinaryLocator.locate(id) else {
+            return .missing(id: id, name: name, required: required)
+        }
+
+        let result = await run(arguments: arguments, executable: binary)
+        if result.exitCode == 0 {
+            return EngineToolStatus(
+                id: id,
+                name: name,
+                state: .installed,
+                version: Self.firstOutputLine(from: result.output),
+                path: binary.path,
+                required: required
+            )
+        }
+
+        return EngineToolStatus(
+            id: id,
+            name: name,
+            state: .failed,
+            version: "Unavailable",
+            path: binary.path,
+            required: required,
+            message: Self.errorSummary(from: result.output)
+        )
+    }
+
     private func run(
         arguments: [String],
         executable: URL,
@@ -328,6 +361,14 @@ public final class YTDLPEngine: @unchecked Sendable {
         return lines.last(where: { $0.localizedCaseInsensitiveContains("ERROR") })
             ?? lines.last
             ?? "yt-dlp failed without output."
+    }
+
+    private static func firstOutputLine(from output: String) -> String {
+        output
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty })
+            ?? "Available"
     }
 
     private static func runStreaming(

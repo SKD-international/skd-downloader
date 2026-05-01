@@ -51,10 +51,11 @@ struct DownloaderRootView: View {
                 }
 
                 Button {
-                    Task { await appState.refreshBinaryStatus() }
+                    Task { await appState.refreshEngineHealth() }
                 } label: {
-                    Label("Refresh Binary", systemImage: "arrow.clockwise")
+                    Label("Refresh Engine", systemImage: "arrow.clockwise")
                 }
+                .disabled(appState.isCheckingEngineHealth)
 
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")

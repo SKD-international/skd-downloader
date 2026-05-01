@@ -66,3 +66,4 @@ Sources checked:
 - Sidecar metadata toggles for info JSON and description files.
 - Embedded chapters toggle for video downloads.
 - Fragment worker setting for `yt-dlp -N`.
+- Engine Health panel for `yt-dlp`, `ffmpeg`, `ffprobe`, and Homebrew diagnostics.

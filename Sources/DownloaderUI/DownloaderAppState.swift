@@ -140,6 +140,8 @@ public final class DownloaderAppState: ObservableObject {
     @Published private(set) var isBinaryInstalled = false
     @Published private(set) var binaryVersion = "Checking…"
     @Published private(set) var binaryPath = ""
+    @Published private(set) var engineHealth = EngineHealthReport(tools: [])
+    @Published private(set) var isCheckingEngineHealth = false
     @Published private(set) var themePreset: DownloaderThemePreset
     @Published var statusMessage = "Ready"
     @Published var isFetching = false
@@ -235,15 +237,36 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         didBootstrap = true
-        await refreshBinaryStatus()
+        await refreshEngineHealth()
     }
 
     func refreshBinaryStatus() async {
-        let status = await engine.checkInstallation()
-        isBinaryInstalled = status.installed
-        binaryVersion = status.version
-        binaryPath = status.path
-        statusMessage = status.installed ? "Ready to queue downloads." : "yt-dlp not found. Install it or fix your PATH."
+        await refreshEngineHealth()
+    }
+
+    func refreshEngineHealth() async {
+        isCheckingEngineHealth = true
+        let report = await engine.checkToolchain()
+        engineHealth = report
+
+        let ytdlp = report.tools.first(where: { $0.id == "yt-dlp" })
+        isBinaryInstalled = ytdlp?.isUsable == true
+        binaryVersion = ytdlp?.version ?? "Unavailable"
+        binaryPath = ytdlp?.path ?? ""
+        statusMessage = report.isReady ? "Ready to queue downloads." : report.statusMessage
+        isCheckingEngineHealth = false
+    }
+
+    func copyEngineDiagnostics() {
+        copyToClipboard(engineHealth.diagnosticsText, label: "engine diagnostics")
+    }
+
+    func copyEngineInstallCommand() {
+        copyToClipboard(engineHealth.installCommand, label: "install command")
+    }
+
+    func copyEngineUpdateCommand() {
+        copyToClipboard(engineHealth.updateCommand, label: "update command")
     }
 
     func selectOverview() {

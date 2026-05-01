@@ -26,7 +26,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-update_cask_sha() {
+update_cask_metadata() {
   local checksum="$1"
   local cask_paths=(
     "$ROOT_DIR/homebrew/skd-downloader.rb"
@@ -35,7 +35,10 @@ update_cask_sha() {
 
   for cask_path in "${cask_paths[@]}"; do
     if [[ -f "$cask_path" ]]; then
-      SKD_RELEASE_SHA="$checksum" perl -0pi -e 's/sha256 (?::no_check|"[a-f0-9]{64}")/sha256 "$ENV{SKD_RELEASE_SHA}"/' "$cask_path"
+      SKD_RELEASE_VERSION="$VERSION" SKD_RELEASE_SHA="$checksum" perl -0pi -e '
+        s/version "[^"]+"/version "$ENV{SKD_RELEASE_VERSION}"/;
+        s/sha256 (?::no_check|"[a-f0-9]{64}")/sha256 "$ENV{SKD_RELEASE_SHA}"/;
+      ' "$cask_path"
     fi
   done
 }
@@ -318,9 +321,7 @@ fi
 
 FINAL_SHA="$(shasum -a 256 "$ASSET_PATH" | awk '{ print $1 }')"
 
-if [[ "$NOTARIZE" -eq 1 ]]; then
-  update_cask_sha "$FINAL_SHA"
-fi
+update_cask_metadata "$FINAL_SHA"
 
 if [[ "$NOTARIZE" -eq 1 ]]; then
   spctl --assess --type execute --verbose=2 "$APP_PATH"
@@ -338,6 +339,7 @@ SKD Downloader Native $VERSION
 - Adds resilient cookie handling with fallback when browser cookie access is denied.
 - Adds native queue stop controls, format inspection, manual yt-dlp format selection, copyable command previews, and per-job activity logs.
 - Adds download archive duplicate protection, info/description sidecar metadata, embedded chapters, and fragment worker tuning.
+- Adds an Engine Health panel for yt-dlp, ffmpeg, ffprobe, and Homebrew diagnostics.
 - Signed with Developer ID$(if [[ "$NOTARIZE" -eq 1 ]]; then echo " and notarized"; else echo ""; fi).
 
 Artifact:

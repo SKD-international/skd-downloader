@@ -59,10 +59,11 @@ struct DownloaderSettingsView: View {
 
                 Spacer()
 
-                Button("Refresh Binary") {
-                    Task { await appState.refreshBinaryStatus() }
+                Button(appState.isCheckingEngineHealth ? "Checking…" : "Refresh Engine") {
+                    Task { await appState.refreshEngineHealth() }
                 }
                 .buttonStyle(.bordered)
+                .disabled(appState.isCheckingEngineHealth)
 
                 Button("Save Changes") {
                     appState.persistConfiguration(showStatusMessage: true)
@@ -214,15 +215,44 @@ struct DownloaderSettingsView: View {
                 LabeledContent("Queue Items", value: "\(appState.queueSummary.total)")
                 LabeledContent("Recent History", value: "\(appState.history.count)")
                 LabeledContent("Selected Mode", value: appState.selectedMode.rawValue.capitalized)
-                LabeledContent("Binary", value: appState.isBinaryInstalled ? "Installed" : "Missing")
+                LabeledContent("Engine", value: appState.engineHealth.statusTitle)
+            }
+
+            Section("Engine Health") {
+                ForEach(appState.engineHealth.tools) { tool in
+                    LabeledContent(tool.name) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(tool.state.rawValue.capitalized)
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(tool.path.isEmpty ? tool.message : tool.path)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
+                HStack {
+                    Button("Refresh Engine") {
+                        Task { await appState.refreshEngineHealth() }
+                    }
+                    .disabled(appState.isCheckingEngineHealth)
+
+                    Button("Copy Diagnostics") {
+                        appState.copyEngineDiagnostics()
+                    }
+
+                    Button("Copy Install") {
+                        appState.copyEngineInstallCommand()
+                    }
+
+                    Button("Copy Update") {
+                        appState.copyEngineUpdateCommand()
+                    }
+                }
             }
 
             Section("Setup") {
-                Text("Install requirements with Homebrew:")
-                Text("brew install yt-dlp ffmpeg")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .textSelection(.enabled)
-
                 Text("Config and history are stored in ~/Library/Application Support/skd-downloader-native/")
                     .foregroundStyle(.secondary)
             }

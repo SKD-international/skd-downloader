@@ -12,6 +12,7 @@ struct DownloaderOverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 commandHeader
+                engineHealthSection
                 composerSection
                 statsSection
                 workbenchSection
@@ -139,6 +140,52 @@ struct DownloaderOverviewView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Capsule(style: .continuous).fill(tint.opacity(theme.isLight ? 0.14 : 0.2)))
+    }
+
+    private var engineHealthSection: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(appState.engineHealth.statusTitle, systemImage: appState.engineHealth.isReady ? "checkmark.seal.fill" : "wrench.and.screwdriver.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(appState.engineHealth.isReady ? theme.success : theme.warning)
+
+                Text(appState.engineHealth.statusMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(2)
+            }
+            .frame(width: 240, alignment: .leading)
+
+            Divider()
+                .frame(height: 56)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(appState.engineHealth.tools) { tool in
+                    EngineToolPill(tool: tool, theme: theme)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: 8) {
+                Button {
+                    Task { await appState.refreshEngineHealth() }
+                } label: {
+                    Label(appState.isCheckingEngineHealth ? "Checking" : "Refresh", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.isCheckingEngineHealth)
+
+                Button {
+                    appState.copyEngineDiagnostics()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(16)
+        .downloaderPanel(theme: theme, radius: 18)
     }
 
     private var composerSection: some View {
@@ -384,6 +431,70 @@ private struct SummaryMetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .downloaderPanel(theme: theme, radius: 20)
+    }
+}
+
+private struct EngineToolPill: View {
+    let tool: EngineToolStatus
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tool.name)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(theme.bodyText)
+                    .lineLimit(1)
+
+                Text(detail)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(theme.isLight ? 0.1 : 0.16))
+        }
+    }
+
+    private var detail: String {
+        switch tool.state {
+        case .installed:
+            return tool.compactVersion
+        case .missing:
+            return "Missing"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private var symbol: String {
+        switch tool.state {
+        case .installed:
+            return "checkmark.circle.fill"
+        case .missing:
+            return tool.required ? "exclamationmark.triangle.fill" : "minus.circle"
+        case .failed:
+            return "xmark.octagon.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch tool.state {
+        case .installed:
+            return theme.success
+        case .missing:
+            return tool.required ? theme.warning : theme.mutedText
+        case .failed:
+            return theme.danger
+        }
     }
 }
 

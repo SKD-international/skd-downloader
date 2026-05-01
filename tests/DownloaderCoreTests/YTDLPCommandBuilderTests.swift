@@ -312,6 +312,96 @@ func homebrewBinaryPathsArePreferredBeforeDevelopmentWrappers() {
 }
 
 @Test
+func emptyEngineHealthReportShowsCheckingState() {
+    let report = EngineHealthReport(tools: [])
+
+    #expect(!report.isReady)
+    #expect(report.statusTitle == "Checking Engine")
+    #expect(report.statusMessage == "Engine health check has not run yet.")
+}
+
+@Test
+func engineHealthReportRequiresCoreDownloadTools() {
+    let report = EngineHealthReport(tools: [
+        EngineToolStatus(
+            id: "yt-dlp",
+            name: "yt-dlp",
+            state: .installed,
+            version: "2026.03.17",
+            path: "/usr/local/bin/yt-dlp",
+            required: true
+        ),
+        .missing(id: "ffmpeg", name: "ffmpeg", required: true),
+        EngineToolStatus(
+            id: "brew",
+            name: "Homebrew",
+            state: .missing,
+            version: "Missing",
+            path: "",
+            required: false,
+            message: "Homebrew was not found on PATH."
+        ),
+    ])
+
+    #expect(!report.isReady)
+    #expect(report.statusTitle == "Engine Needs Setup")
+    #expect(report.statusMessage == "Missing required tools: ffmpeg.")
+    #expect(report.missingRequiredTools.map(\.id) == ["ffmpeg"])
+    #expect(report.diagnosticsText.contains("yt-dlp: installed"))
+    #expect(report.diagnosticsText.contains("Install: brew install yt-dlp ffmpeg"))
+    #expect(report.diagnosticsText.contains("Update: brew update && brew upgrade yt-dlp ffmpeg"))
+}
+
+@Test
+func engineHealthReportIsReadyWhenRequiredToolsAreInstalled() {
+    let report = EngineHealthReport(tools: [
+        EngineToolStatus(
+            id: "yt-dlp",
+            name: "yt-dlp",
+            state: .installed,
+            version: "2026.03.17",
+            path: "/usr/local/bin/yt-dlp",
+            required: true
+        ),
+        EngineToolStatus(
+            id: "ffmpeg",
+            name: "ffmpeg",
+            state: .installed,
+            version: "ffmpeg version 8.0",
+            path: "/usr/local/bin/ffmpeg",
+            required: true
+        ),
+        EngineToolStatus(
+            id: "ffprobe",
+            name: "ffprobe",
+            state: .installed,
+            version: "ffprobe version 8.0",
+            path: "/usr/local/bin/ffprobe",
+            required: true
+        ),
+    ])
+
+    #expect(report.isReady)
+    #expect(report.statusTitle == "Engine Ready")
+    #expect(report.statusMessage == "yt-dlp, ffmpeg, and ffprobe are available.")
+    #expect(report.missingRequiredTools.isEmpty)
+}
+
+@Test
+func engineToolStatusCompactsLongFFmpegVersions() {
+    let status = EngineToolStatus(
+        id: "ffmpeg",
+        name: "ffmpeg",
+        state: .installed,
+        version: "ffmpeg version 8.0 Copyright (c) 2000-2026 the FFmpeg developers",
+        path: "/usr/local/bin/ffmpeg",
+        required: true
+    )
+
+    #expect(status.compactVersion == "ffmpeg 8.0")
+}
+
+@Test
 func downloaderPreferencesFallbacksStayStable() {
     let suiteName = "DownloaderAppPreferencesTests"
     let defaults = UserDefaults(suiteName: suiteName)!
