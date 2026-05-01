@@ -1,8 +1,16 @@
 cask "skd-downloader" do
   version "0.9.0-beta.6"
-  sha256 "095abbb707c5aca0cf075f0ac643f6df6f7959a2974dd0a38044816412d32bf9"
+  sha256 "0eab71e46613e089ee22ac9a4cf7def8cd2566f8adfa3e365eda9f3c656f052f"
 
-  url "https://github.com/SKD-international/skd-downloader/releases/download/v#{version}/SKD.Downloader.Native-#{version}-mac.zip"
+  github_token = ENV.fetch("HOMEBREW_GITHUB_API_TOKEN") do
+    raise "HOMEBREW_GITHUB_API_TOKEN is required to install this private beta cask"
+  end
+
+  url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/409931418?version=#{version}",
+      header: [
+        "Accept: application/octet-stream",
+        "Authorization: Bearer #{github_token}",
+      ]
   name "SKD Downloader"
   desc "Downloader GUI and MediaHuman alternative"
   homepage "https://github.com/SKD-international/skd-downloader"
@@ -12,6 +20,11 @@ cask "skd-downloader" do
   depends_on formula: "ffmpeg"
 
   app "SKD Downloader.app"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/SKD Downloader.app"]
+  end
 
   zap trash: [
     "~/Library/Application Support/skd-downloader",

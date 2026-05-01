@@ -28,6 +28,7 @@ trap cleanup EXIT
 
 update_cask_metadata() {
   local checksum="$1"
+  local asset_id="${2:-}"
   local cask_paths=(
     "$ROOT_DIR/homebrew/skd-downloader.rb"
     "/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb"
@@ -35,9 +36,12 @@ update_cask_metadata() {
 
   for cask_path in "${cask_paths[@]}"; do
     if [[ -f "$cask_path" ]]; then
-      SKD_RELEASE_VERSION="$VERSION" SKD_RELEASE_SHA="$checksum" perl -0pi -e '
+      SKD_RELEASE_VERSION="$VERSION" SKD_RELEASE_SHA="$checksum" SKD_RELEASE_ASSET_ID="$asset_id" perl -0pi -e '
         s/version "[^"]+"/version "$ENV{SKD_RELEASE_VERSION}"/;
         s/sha256 (?::no_check|"[a-f0-9]{64}")/sha256 "$ENV{SKD_RELEASE_SHA}"/;
+        if ($ENV{SKD_RELEASE_ASSET_ID}) {
+          s!url "https://(?:api\.github\.com/repos/SKD-international/skd-downloader/releases/assets/\d+(?:\?version=\#\{version\})?|github\.com/SKD-international/skd-downloader/releases/download/v\#\{version\}/SKD\.Downloader\.Native-\#\{version\}-mac\.zip)"!url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/$ENV{SKD_RELEASE_ASSET_ID}?version=#{version}"!;
+        }
       ' "$cask_path"
     fi
   done
@@ -365,6 +369,17 @@ if [[ "$UPLOAD" -eq 1 ]]; then
       --prerelease \
       --target "$(git rev-parse HEAD)"
   fi
+
+  ASSET_ID="$(gh release view "$TAG" \
+    --repo "$REPO" \
+    --json assets \
+    --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .id" \
+    | head -n 1)"
+  if [[ -z "$ASSET_ID" ]]; then
+    echo "could not resolve uploaded asset id for $ASSET_NAME" >&2
+    exit 1
+  fi
+  update_cask_metadata "$FINAL_SHA" "$ASSET_ID"
 fi
 
 echo "$NOTES_PATH"
