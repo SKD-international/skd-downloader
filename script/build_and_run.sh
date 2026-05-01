@@ -7,6 +7,7 @@ APP_DISPLAY_NAME="SKD Downloader"
 BUNDLE_ID="com.skd.downloader.native"
 MIN_SYSTEM_VERSION="14.0"
 DEFAULT_GITHUB_REPO="SKD-international/skd-downloader"
+BUILD_CONFIGURATION="${SKD_NATIVE_BUILD_CONFIGURATION:-release}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/native"
@@ -24,14 +25,92 @@ ZIP_PATH="$DIST_DIR/$ZIP_NAME"
 
 pkill -x "$PROCESS_NAME" >/dev/null 2>&1 || true
 
-swift build --product "$PROCESS_NAME"
-BUILD_BINARY="$(swift build --show-bin-path)/$PROCESS_NAME"
-
 mkdir -p "$DIST_DIR" "$STAGING_DIR"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-cp "$BUILD_BINARY" "$APP_BINARY"
-chmod +x "$APP_BINARY"
+
+current_arch() {
+  case "$(uname -m)" in
+    arm64) echo "arm64" ;;
+    x86_64|amd64) echo "x86_64" ;;
+    *)
+      echo "unsupported host architecture: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+default_archs_for_mode() {
+  case "$MODE" in
+    --build|build|--package|package|--metadata|metadata)
+      echo "arm64 x86_64"
+      ;;
+    *)
+      current_arch
+      ;;
+  esac
+}
+
+normalize_archs() {
+  local raw="${SKD_NATIVE_ARCHS:-$(default_archs_for_mode)}"
+  echo "$raw" | tr ',' ' '
+}
+
+build_slice() {
+  local arch="$1"
+  local triple="${arch}-apple-macosx${MIN_SYSTEM_VERSION}"
+  local scratch_path="$ROOT_DIR/.build/skd-${arch}-${BUILD_CONFIGURATION}"
+  local bin_path=""
+
+  case "$arch" in
+    arm64|x86_64) ;;
+    *)
+      echo "unsupported SKD native architecture: $arch" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building $PROCESS_NAME for $arch ($BUILD_CONFIGURATION)..." >&2
+  swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --product "$PROCESS_NAME" >&2
+  bin_path="$(swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --show-bin-path)"
+
+  if [[ ! -x "$bin_path/$PROCESS_NAME" ]]; then
+    echo "missing built binary for $arch at $bin_path/$PROCESS_NAME" >&2
+    exit 1
+  fi
+
+  echo "$bin_path/$PROCESS_NAME"
+}
+
+build_app_binary() {
+  local arch
+  local slice
+  local -a archs=()
+  local -a slices=()
+
+  read -r -a archs <<<"$(normalize_archs)"
+
+  if [[ "${#archs[@]}" -eq 0 ]]; then
+    echo "no SKD native architectures selected" >&2
+    exit 1
+  fi
+
+  for arch in "${archs[@]}"; do
+    slice="$(build_slice "$arch")"
+    slices+=("$slice")
+  done
+
+  if [[ "${#slices[@]}" -eq 1 ]]; then
+    cp "${slices[0]}" "$APP_BINARY"
+  else
+    /usr/bin/lipo -create "${slices[@]}" -output "$APP_BINARY"
+  fi
+
+  chmod +x "$APP_BINARY"
+  echo "Packaged architectures: $(/usr/bin/lipo -archs "$APP_BINARY")" >&2
+}
+
+build_app_binary
 
 if [[ -f "$ROOT_DIR/$ICON_SOURCE" ]]; then
   cp "$ROOT_DIR/$ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"

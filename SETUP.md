@@ -40,10 +40,15 @@ The native macOS app is distributed through the SKD tap:
 
 ```bash
 brew tap bonchaloo/tap
+export HOMEBREW_GITHUB_API_TOKEN="$(gh auth token)" # required while the beta repo is private
 brew install --cask skd-downloader
 ```
 
 The cask installs the Homebrew `yt-dlp` and `ffmpeg` formula dependencies. The native app resolves those Homebrew-managed tools through absolute `/opt/homebrew` and `/usr/local` paths so GUI launches work even when macOS starts the app with a minimal `PATH`.
+
+The native cask supports macOS 14 Sonoma and newer, including macOS 15 Sequoia.
+Release artifacts are universal `arm64` + `x86_64` app bundles for Apple
+Silicon and Intel Macs.
 
 ## What The App Expects
 

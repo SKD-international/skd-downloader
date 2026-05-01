@@ -21,8 +21,13 @@ A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in rep
 
 ```bash
 brew tap bonchaloo/tap
+export HOMEBREW_GITHUB_API_TOKEN="$(gh auth token)" # required while the beta repo is private
 brew install --cask skd-downloader
 ```
+
+The native Homebrew beta targets macOS 14 Sonoma and newer, including macOS 15
+Sequoia. Release packages are built as universal `arm64` + `x86_64` app bundles
+so the same cask can run on Apple Silicon and Intel Macs.
 
 ### From source
 
@@ -56,7 +61,7 @@ The Swift native app is packaged separately for the Homebrew cask:
 npm run native:release
 ```
 
-This runs the Node and Swift test suites, builds `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
+This runs the Node and Swift test suites, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
 
 To upload the native artifact to GitHub:
 

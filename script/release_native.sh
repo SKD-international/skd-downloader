@@ -301,8 +301,31 @@ fi
 VERIFY_DIR="$(mktemp -d /tmp/skd-downloader-native-verify.XXXXXX)"
 ditto -x -k "$ASSET_PATH" "$VERIFY_DIR"
 APP_PATH="$VERIFY_DIR/SKD Downloader.app"
+RELEASE_BINARY="$APP_PATH/Contents/MacOS/SKDDownloaderNative"
 
 test -d "$APP_PATH"
+test -x "$RELEASE_BINARY"
+
+RELEASE_ARCHS="$(/usr/bin/lipo -archs "$RELEASE_BINARY")"
+for REQUIRED_ARCH in arm64 x86_64; do
+  if [[ " $RELEASE_ARCHS " != *" $REQUIRED_ARCH "* ]]; then
+    echo "release artifact must be universal; missing $REQUIRED_ARCH slice in '$RELEASE_ARCHS'" >&2
+    exit 1
+  fi
+done
+
+PLIST_MIN_VERSION="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_PATH/Contents/Info.plist")"
+if [[ "$PLIST_MIN_VERSION" != "14.0" ]]; then
+  echo "release artifact LSMinimumSystemVersion must be 14.0; got $PLIST_MIN_VERSION" >&2
+  exit 1
+fi
+
+MINOS_COUNT="$(/usr/bin/otool -arch all -l "$RELEASE_BINARY" | awk '/minos 14\.0/ { count++ } END { print count + 0 }')"
+if [[ "$MINOS_COUNT" -lt 2 ]]; then
+  echo "release artifact must advertise macOS minos 14.0 for both architecture slices" >&2
+  exit 1
+fi
+
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP_PATH" 2>&1)"
 if [[ "$SIGNATURE_DETAILS" != *"Authority=Developer ID Application"* ]]; then
@@ -339,6 +362,7 @@ cat >"$NOTES_PATH" <<EOF
 SKD Downloader Native $VERSION
 
 - Native Swift macOS app bundle for Homebrew cask distribution.
+- Universal macOS binary for Apple Silicon and Intel Macs on Sonoma or Sequoia.
 - Uses Homebrew-managed yt-dlp/ffmpeg/ffprobe through the cask dependencies.
 - Adds resilient cookie handling with fallback when browser cookie access is denied.
 - Adds native queue stop controls, format inspection, manual yt-dlp format selection, copyable command previews, and per-job activity logs.
