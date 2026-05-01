@@ -153,31 +153,33 @@ struct DownloaderCanvasBackground: View {
 
     var body: some View {
         ZStack {
+            theme.canvasBase
+
             LinearGradient(
-                colors: [theme.canvasBase, theme.canvasEdge],
+                colors: [
+                    theme.canvasEdge.opacity(theme.isLight ? 0.94 : 0.82),
+                    theme.canvasBase,
+                    theme.canvasEdge.opacity(theme.isLight ? 0.72 : 0.64),
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            RadialGradient(
-                colors: [theme.tint.opacity(theme.isLight ? 0.16 : 0.14), .clear],
-                center: .topLeading,
-                startRadius: 30,
-                endRadius: 420
-            )
-
-            RadialGradient(
-                colors: [theme.secondaryTint.opacity(theme.isLight ? 0.12 : 0.1), .clear],
-                center: .bottomTrailing,
-                startRadius: 40,
-                endRadius: 460
+            LinearGradient(
+                colors: [
+                    theme.tint.opacity(theme.isLight ? 0.06 : 0.08),
+                    .clear,
+                    theme.secondaryTint.opacity(theme.isLight ? 0.035 : 0.045),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
             )
         }
     }
 }
 
 extension View {
-    func downloaderPanel(theme: DownloaderThemeStyle, tone: DownloaderPanelTone = .regular, radius: CGFloat = 22) -> some View {
+    func downloaderPanel(theme: DownloaderThemeStyle, tone: DownloaderPanelTone = .regular, radius: CGFloat = 14) -> some View {
         background(DownloaderPanelBackground(theme: theme, tone: tone, radius: radius))
     }
 }
@@ -188,31 +190,32 @@ private struct DownloaderPanelBackground: View {
     let radius: CGFloat
 
     var body: some View {
+        let effectiveRadius = min(radius, 16)
         let tintOpacity: Double
         switch tone {
         case .regular:
-            tintOpacity = theme.isLight ? 0.08 : 0.12
+            tintOpacity = theme.isLight ? 0.06 : 0.08
         case .accent:
-            tintOpacity = theme.isLight ? 0.14 : 0.18
+            tintOpacity = theme.isLight ? 0.1 : 0.12
         case .strong:
-            tintOpacity = theme.isLight ? 0.18 : 0.22
+            tintOpacity = theme.isLight ? 0.13 : 0.16
         }
 
-        return RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return RoundedRectangle(cornerRadius: effectiveRadius, style: .continuous)
             .fill(.regularMaterial)
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                RoundedRectangle(cornerRadius: effectiveRadius, style: .continuous)
                     .fill(theme.panelTint.opacity(tintOpacity))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                RoundedRectangle(cornerRadius: effectiveRadius, style: .continuous)
                     .stroke(theme.panelStroke, lineWidth: 1)
             }
             .shadow(
-                color: theme.shadowColor.opacity(tone == .strong ? 1 : 0.78),
-                radius: tone == .strong ? 28 : 18,
+                color: theme.shadowColor.opacity(tone == .strong ? 0.72 : 0.48),
+                radius: tone == .strong ? 18 : 10,
                 x: 0,
-                y: tone == .strong ? 14 : 8
+                y: tone == .strong ? 10 : 5
             )
     }
 }

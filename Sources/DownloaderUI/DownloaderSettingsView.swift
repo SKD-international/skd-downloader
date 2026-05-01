@@ -265,10 +265,10 @@ struct DownloaderSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Visual Direction")
+                    Text("Appearance")
                         .font(.system(size: 18, weight: .bold))
 
-                    Text("Use the SKD default or switch to desktop-native looks inspired by awesome-design-md references.")
+                    Text("Choose the workspace tone that fits the way you queue and inspect downloads.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
@@ -293,10 +293,10 @@ struct DownloaderSettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Reference Mix")
+                    Text("Theme Notes")
                         .font(.system(size: 13, weight: .bold))
 
-                    Text("Default recommendation: Linear structure, Raycast mood, SKD color energy. Notion Warm stays available if you want a softer workspace feel.")
+                    Text("SKD Midnight is tuned for focused queue work. Linear Light and Notion Warm keep the same structure with lower contrast.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                 }

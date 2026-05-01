@@ -65,20 +65,35 @@ private struct QueueSidebarRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: iconName)
-                .foregroundStyle(iconColor)
-                .frame(width: 16)
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(theme.isLight ? 0.14 : 0.18))
+
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(iconColor)
+            }
+            .frame(width: 20, height: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
 
-                Text("\(item.mode.rawValue.capitalized) • \(item.status.title)")
-                    .font(.caption)
+                Text(sidebarDetail)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }
         }
+    }
+
+    private var sidebarDetail: String {
+        if item.status == .downloading {
+            return "\(item.mode.rawValue.capitalized) - \(Int(item.progress))% - \(item.speed)"
+        }
+
+        return "\(item.mode.rawValue.capitalized) - \(item.status.title)"
     }
 
     private var iconName: String {
@@ -107,16 +122,18 @@ private struct HistorySidebarRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: entry.mode == .video ? "film" : "waveform")
+            Image(systemName: entry.mode == .video ? "film.fill" : "waveform")
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(theme.modeColor(entry.mode))
-                .frame(width: 16)
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title)
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
 
                 Text(entry.downloadedAt.formatted(date: .numeric, time: .shortened))
-                    .font(.caption)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }

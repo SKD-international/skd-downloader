@@ -10,14 +10,19 @@ struct DownloaderOverviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 commandHeader
-                engineHealthSection
-                composerSection
-                statsSection
+                HStack(alignment: .top, spacing: 16) {
+                    composerSection
+                        .frame(minWidth: 560)
+
+                    engineHealthSection
+                        .frame(width: 360)
+                }
+                queueStateRail
                 workbenchSection
             }
-            .padding(24)
+            .padding(20)
         }
         .background {
             DownloaderCanvasBackground(theme: theme)
@@ -29,24 +34,47 @@ struct DownloaderOverviewView: View {
     }
 
     private var commandHeader: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Download Workbench")
-                    .font(.system(size: 24, weight: .bold))
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("SKD Command Deck")
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
-                Text(appState.isBinaryInstalled ? appState.binaryPath : "yt-dlp unavailable")
+                Text(appState.isBinaryInstalled ? appState.binaryPath : "Install yt-dlp and ffmpeg to enable downloads.")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }
 
+            HStack(spacing: 8) {
+                CommandStatusChip(
+                    title: appState.engineHealth.isReady ? "Engine" : "Setup",
+                    value: appState.engineHealth.statusTitle,
+                    tint: appState.engineHealth.isReady ? theme.success : theme.warning,
+                    theme: theme
+                )
+
+                CommandStatusChip(
+                    title: "Queue",
+                    value: "\(appState.queueSummary.total) jobs",
+                    tint: theme.tint,
+                    theme: theme
+                )
+            }
+
             Spacer()
+
+            Button {
+                appState.pasteURLFromClipboard()
+            } label: {
+                Label("Paste", systemImage: "doc.on.clipboard")
+            }
+            .buttonStyle(.bordered)
 
             Button {
                 Task { await appState.startQueue() }
             } label: {
-                Label("Start", systemImage: "play.circle.fill")
+                Label("Start Queue", systemImage: "arrow.down.circle.fill")
             }
             .buttonStyle(.borderedProminent)
             .disabled(!appState.canStartQueue)
@@ -62,112 +90,41 @@ struct DownloaderOverviewView: View {
             Button {
                 appState.openOutputFolder()
             } label: {
-                Label("Folder", systemImage: "folder")
+                Label("Output", systemImage: "folder")
             }
             .buttonStyle(.bordered)
         }
-        .padding(20)
-        .downloaderPanel(theme: theme, tone: .strong, radius: 18)
-    }
-
-    private var heroSection: some View {
-        HStack(alignment: .top, spacing: 22) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("SKD Downloader")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(theme.heroPrimaryText)
-
-                Text("A native control deck for queueing, converting, and verifying media jobs without leaving the desktop.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(theme.heroSecondaryText)
-
-                HStack(spacing: 8) {
-                    heroBadge("Theme: \(appState.themePreset.displayName)", tint: theme.tint)
-                    heroBadge("\(appState.queueSummary.total) total jobs", tint: theme.secondaryTint)
-                    heroBadge("\(appState.overviewHistoryEntries.count) recent files", tint: theme.tertiaryTint)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text(appState.isBinaryInstalled ? "Binary Ready" : "Binary Missing")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(theme.heroPrimaryText)
-
-                Text(appState.isBinaryInstalled ? appState.binaryPath : "Install yt-dlp and ffmpeg to enable downloads.")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.heroSecondaryText)
-                    .lineLimit(3)
-
-                Divider()
-                    .overlay(theme.heroSecondaryText.opacity(0.12))
-
-                Text(appState.themePreset.designReference)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.heroSecondaryText)
-
-                Text(appState.themePreset.summary)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.heroSecondaryText)
-            }
-            .frame(width: 280, alignment: .leading)
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(theme.isLight ? 0.42 : 0.06))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(theme.isLight ? 0.2 : 0.08), lineWidth: 1)
-                    }
-            }
-        }
-        .padding(24)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(theme.heroGradient)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(theme.panelStroke.opacity(theme.isLight ? 0.75 : 0.6), lineWidth: 1)
-                }
-                .shadow(color: theme.shadowColor.opacity(0.92), radius: 28, x: 0, y: 16)
-        }
-    }
-
-    private func heroBadge(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(theme.heroPrimaryText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule(style: .continuous).fill(tint.opacity(theme.isLight ? 0.14 : 0.2)))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .downloaderPanel(theme: theme, tone: .strong, radius: 14)
     }
 
     private var engineHealthSection: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
                 Label(appState.engineHealth.statusTitle, systemImage: appState.engineHealth.isReady ? "checkmark.seal.fill" : "wrench.and.screwdriver.fill")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(appState.engineHealth.isReady ? theme.success : theme.warning)
 
-                Text(appState.engineHealth.statusMessage)
-                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+
+                Text(appState.themePreset.displayName)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
-                    .lineLimit(2)
             }
-            .frame(width: 240, alignment: .leading)
 
-            Divider()
-                .frame(height: 56)
+            Text(appState.engineHealth.statusMessage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.mutedText)
+                .lineLimit(2)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            VStack(spacing: 8) {
                 ForEach(appState.engineHealth.tools) { tool in
                     EngineToolPill(tool: tool, theme: theme)
                 }
             }
 
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 8) {
                 Button {
                     Task { await appState.refreshEngineHealth() }
                 } label: {
@@ -185,40 +142,50 @@ struct DownloaderOverviewView: View {
             }
         }
         .padding(16)
-        .downloaderPanel(theme: theme, radius: 18)
+        .downloaderPanel(theme: theme, radius: 14)
     }
 
     private var composerSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Add URLs")
+                    Label("Add URLs", systemImage: "link.badge.plus")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
-                    Text("Paste one URL per line, choose defaults, then queue everything in one pass.")
+                    Text("One URL per line. Queue first, inspect formats when needed.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
 
                 Spacer()
 
-                Button("Paste URL") {
-                    appState.pasteURLFromClipboard()
+                HStack(spacing: 8) {
+                    Button {
+                        appState.pasteURLFromClipboard()
+                    } label: {
+                        Label("Paste URL", systemImage: "doc.on.clipboard")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(appState.isFetching ? "Fetching..." : "Add to Queue") {
+                        Task { await appState.addURL() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(appState.isFetching || appState.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .buttonStyle(.bordered)
             }
 
             TextEditor(text: $appState.urlInput)
                 .font(.system(size: 14, weight: .medium))
-                .frame(minHeight: 84)
+                .frame(minHeight: 112)
                 .scrollContentBackground(.hidden)
                 .padding(10)
                 .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(theme.canvasBase.opacity(theme.isLight ? 0.55 : 0.5))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(theme.panelStroke, lineWidth: 1)
                         }
                 }
@@ -265,24 +232,6 @@ struct DownloaderOverviewView: View {
                 }
 
                 Spacer(minLength: 0)
-
-                Button(appState.isFetching ? "Fetching…" : "Add to Queue") {
-                    Task { await appState.addURL() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(appState.isFetching || appState.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button(appState.isDownloading ? "Downloading…" : "Start Queue") {
-                    Task { await appState.startQueue() }
-                }
-                .buttonStyle(.bordered)
-                .disabled(!appState.canStartQueue)
-
-                Button("Stop") {
-                    appState.stopDownloads()
-                }
-                .buttonStyle(.bordered)
-                .disabled(!appState.canStopDownloads)
             }
 
             HStack(spacing: 10) {
@@ -303,17 +252,19 @@ struct DownloaderOverviewView: View {
                 .buttonStyle(.borderless)
             }
         }
-        .padding(22)
-        .downloaderPanel(theme: theme, tone: .accent, radius: 18)
+        .padding(18)
+        .downloaderPanel(theme: theme, tone: .accent, radius: 14)
     }
 
-    private var statsSection: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-            SummaryMetricCard(title: "Queued", value: "\(appState.queueSummary.queued)", symbol: "clock", tint: theme.warning, theme: theme)
-            SummaryMetricCard(title: "Active", value: "\(appState.queueSummary.active)", symbol: "arrow.down.circle.fill", tint: theme.tint, theme: theme)
-            SummaryMetricCard(title: "Completed", value: "\(appState.queueSummary.completed)", symbol: "checkmark.circle.fill", tint: theme.success, theme: theme)
-            SummaryMetricCard(title: "Failed", value: "\(appState.queueSummary.failed)", symbol: "exclamationmark.triangle.fill", tint: theme.danger, theme: theme)
+    private var queueStateRail: some View {
+        HStack(spacing: 1) {
+            QueueRailSegment(title: "Queued", value: "\(appState.queueSummary.queued)", symbol: "clock", tint: theme.warning, theme: theme)
+            QueueRailSegment(title: "Active", value: "\(appState.queueSummary.active)", symbol: "arrow.down.circle.fill", tint: theme.tint, theme: theme)
+            QueueRailSegment(title: "Completed", value: "\(appState.queueSummary.completed)", symbol: "checkmark.circle.fill", tint: theme.success, theme: theme)
+            QueueRailSegment(title: "Failed", value: "\(appState.queueSummary.failed)", symbol: "exclamationmark.triangle.fill", tint: theme.danger, theme: theme)
         }
+        .padding(8)
+        .downloaderPanel(theme: theme, radius: 14)
     }
 
     private var workbenchSection: some View {
@@ -361,6 +312,8 @@ struct DownloaderOverviewView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .downloaderPanel(theme: theme, radius: 14)
     }
 
     private func previewColumn<Content: View>(title: String, emptyState: String, @ViewBuilder content: () -> Content) -> some View {
@@ -380,6 +333,8 @@ struct DownloaderOverviewView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .downloaderPanel(theme: theme, radius: 14)
     }
 
     private func previewPlaceholder(_ text: String) -> some View {
@@ -388,7 +343,14 @@ struct DownloaderOverviewView: View {
             .foregroundStyle(theme.mutedText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
-            .downloaderPanel(theme: theme, radius: 20)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.panelTint.opacity(theme.isLight ? 0.06 : 0.08))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(theme.panelStroke, lineWidth: 1)
+                    }
+            }
     }
 
     private var formatHint: String {
@@ -407,7 +369,37 @@ struct DownloaderOverviewView: View {
     }
 }
 
-private struct SummaryMetricCard: View {
+private struct CommandStatusChip: View {
+    let title: String
+    let value: String
+    let tint: Color
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(theme.mutedText)
+
+            Text(value)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.bodyText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(tint.opacity(theme.isLight ? 0.1 : 0.14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(tint.opacity(theme.isLight ? 0.16 : 0.22), lineWidth: 1)
+                }
+        }
+    }
+}
+
+private struct QueueRailSegment: View {
     let title: String
     let value: String
     let symbol: String
@@ -415,22 +407,29 @@ private struct SummaryMetricCard: View {
     let theme: DownloaderThemeStyle
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.mutedText)
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 18)
 
-            Text(value)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(theme.bodyText)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.mutedText)
 
-            Capsule(style: .continuous)
-                .fill(tint.opacity(theme.isLight ? 0.18 : 0.24))
-                .frame(width: 44, height: 6)
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(theme.bodyText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .downloaderPanel(theme: theme, radius: 20)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(theme.isLight ? 0.07 : 0.1))
+        }
     }
 }
 
@@ -459,8 +458,12 @@ private struct EngineToolPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tint.opacity(theme.isLight ? 0.1 : 0.16))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(tint.opacity(theme.isLight ? 0.08 : 0.1))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(tint.opacity(theme.isLight ? 0.12 : 0.16), lineWidth: 1)
+                }
         }
     }
 

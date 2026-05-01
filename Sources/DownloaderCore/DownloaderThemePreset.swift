@@ -22,13 +22,13 @@ public enum DownloaderThemePreset: String, CaseIterable, Codable, Sendable {
     public var designReference: String {
         switch self {
         case .skdMidnight:
-            return "Custom SKD"
+            return "Default control deck"
         case .raycastPulse:
-            return "awesome-design-md / Raycast"
+            return "Dark command palette"
         case .linearLight:
-            return "awesome-design-md / Linear"
+            return "Precise light workspace"
         case .notionWarm:
-            return "awesome-design-md / Notion"
+            return "Warm organized workspace"
         }
     }
 

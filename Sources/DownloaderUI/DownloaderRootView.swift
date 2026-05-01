@@ -100,15 +100,27 @@ struct DownloaderRootView: View {
                 .foregroundStyle(appState.isBinaryInstalled ? theme.success : theme.warning)
 
             Text(appState.statusMessage)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.bodyText)
                 .lineLimit(1)
 
             Spacer()
 
-            Text(appState.isBinaryInstalled ? "yt-dlp \(appState.binaryVersion)" : "yt-dlp unavailable")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(theme.mutedText)
+            HStack(spacing: 8) {
+                StatusBarToken(
+                    title: "Engine",
+                    value: appState.engineHealth.isReady ? "Ready" : "Setup",
+                    tint: appState.engineHealth.isReady ? theme.success : theme.warning,
+                    theme: theme
+                )
+
+                StatusBarToken(
+                    title: "yt-dlp",
+                    value: appState.isBinaryInstalled ? appState.binaryVersion : "unavailable",
+                    tint: appState.isBinaryInstalled ? theme.tint : theme.warning,
+                    theme: theme
+                )
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
@@ -117,6 +129,36 @@ struct DownloaderRootView: View {
             Rectangle()
                 .fill(theme.panelStroke.opacity(theme.isLight ? 1 : 0.75))
                 .frame(height: 1)
+        }
+    }
+}
+
+private struct StatusBarToken: View {
+    let title: String
+    let value: String
+    let tint: Color
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(theme.mutedText)
+
+            Text(value)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(theme.bodyText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background {
+            Capsule(style: .continuous)
+                .fill(tint.opacity(theme.isLight ? 0.08 : 0.12))
         }
     }
 }
