@@ -116,6 +116,8 @@ struct DownloaderThemeStyle {
             return warning
         case .downloading:
             return tint
+        case .cancelled:
+            return mutedText
         case .completed:
             return success
         case .failed:

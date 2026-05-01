@@ -63,7 +63,16 @@ struct DownloaderQueueDetailView: View {
                 }
                 .buttonStyle(.bordered)
 
-                if item.status.errorMessage != nil {
+                if item.status == .downloading || item.status == .queued {
+                    Button(role: .destructive) {
+                        appState.stopDownload(item.id)
+                    } label: {
+                        Text("Stop")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if item.status.errorMessage != nil || item.status == .cancelled {
                     Button("Retry") {
                         appState.retry(item.id)
                         Task { await appState.startQueue() }

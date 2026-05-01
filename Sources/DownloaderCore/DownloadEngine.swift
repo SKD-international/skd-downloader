@@ -11,6 +11,60 @@ public struct DownloadCommandResult: Equatable, Sendable {
     public let exitCode: Int32
     public let destination: String?
     public let output: String
+    public let wasCancelled: Bool
+
+    public init(exitCode: Int32, destination: String?, output: String, wasCancelled: Bool = false) {
+        self.exitCode = exitCode
+        self.destination = destination
+        self.output = output
+        self.wasCancelled = wasCancelled
+    }
+}
+
+public final class DownloadCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    private weak var process: Process?
+
+    public init() {}
+
+    public var isCancelled: Bool {
+        lock.withLock {
+            cancelled
+        }
+    }
+
+    public func cancel() {
+        let processToTerminate: Process?
+        lock.lock()
+        cancelled = true
+        processToTerminate = process
+        lock.unlock()
+
+        if processToTerminate?.isRunning == true {
+            processToTerminate?.terminate()
+        }
+    }
+
+    fileprivate func bind(_ process: Process) {
+        let shouldTerminate: Bool
+        lock.lock()
+        self.process = process
+        shouldTerminate = cancelled
+        lock.unlock()
+
+        if shouldTerminate, process.isRunning {
+            process.terminate()
+        }
+    }
+
+    fileprivate func unbind(_ process: Process) {
+        lock.withLock {
+            if self.process === process {
+                self.process = nil
+            }
+        }
+    }
 }
 
 public final class DownloadSettingsStore: @unchecked Sendable {
@@ -131,6 +185,7 @@ public final class YTDLPEngine: @unchecked Sendable {
         mode: DownloadMode,
         formatOverride: String?,
         qualityOverride: String?,
+        cancellationToken: DownloadCancellationToken? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async -> DownloadCommandResult {
         guard let binary = BinaryLocator.locate("yt-dlp") else {
@@ -145,7 +200,7 @@ public final class YTDLPEngine: @unchecked Sendable {
             qualityOverride: qualityOverride
         )
 
-        let result = await run(arguments: arguments, executable: binary, onLine: onLine)
+        let result = await run(arguments: arguments, executable: binary, cancellationToken: cancellationToken, onLine: onLine)
         if result.exitCode != 0, Self.shouldRetryWithoutCookies(output: result.output), Self.argumentsUseBrowserCookies(arguments) {
             onLine("[SKD] Browser cookie access failed. Retrying without browser cookies.")
             return await run(
@@ -157,6 +212,7 @@ public final class YTDLPEngine: @unchecked Sendable {
                     qualityOverride: qualityOverride
                 ),
                 executable: binary,
+                cancellationToken: cancellationToken,
                 onLine: onLine
             )
         }
@@ -165,17 +221,23 @@ public final class YTDLPEngine: @unchecked Sendable {
     }
 
     private func run(arguments: [String], executable: URL) async -> DownloadCommandResult {
-        await run(arguments: arguments, executable: executable, onLine: { _ in })
+        await run(arguments: arguments, executable: executable, cancellationToken: nil, onLine: { _ in })
     }
 
     private func run(
         arguments: [String],
         executable: URL,
+        cancellationToken: DownloadCancellationToken? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async -> DownloadCommandResult {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: Self.runStreaming(executable: executable, arguments: arguments, onLine: onLine))
+                continuation.resume(returning: Self.runStreaming(
+                    executable: executable,
+                    arguments: arguments,
+                    cancellationToken: cancellationToken,
+                    onLine: onLine
+                ))
             }
         }
     }
@@ -226,8 +288,13 @@ public final class YTDLPEngine: @unchecked Sendable {
     private static func runStreaming(
         executable: URL,
         arguments: [String],
+        cancellationToken: DownloadCancellationToken?,
         onLine: @escaping @Sendable (String) -> Void
     ) -> DownloadCommandResult {
+        if cancellationToken?.isCancelled == true {
+            return DownloadCommandResult(exitCode: -2, destination: nil, output: "Download stopped.", wasCancelled: true)
+        }
+
         let process = Process()
         let outputPipe = Pipe()
 
@@ -240,6 +307,11 @@ public final class YTDLPEngine: @unchecked Sendable {
 
         var combinedOutput = ""
         var lastDestination: String?
+
+        cancellationToken?.bind(process)
+        defer {
+            cancellationToken?.unbind(process)
+        }
 
         do {
             try process.run()
@@ -277,9 +349,12 @@ public final class YTDLPEngine: @unchecked Sendable {
         }
 
         return DownloadCommandResult(
-            exitCode: process.terminationStatus,
+            exitCode: cancellationToken?.isCancelled == true ? -2 : process.terminationStatus,
             destination: lastDestination,
-            output: combinedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            output: cancellationToken?.isCancelled == true
+                ? "Download stopped."
+                : combinedOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+            wasCancelled: cancellationToken?.isCancelled == true
         )
     }
 

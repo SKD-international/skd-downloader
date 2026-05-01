@@ -87,6 +87,8 @@ private struct QueueSidebarRow: View {
             return "clock"
         case .downloading:
             return "arrow.down.circle.fill"
+        case .cancelled:
+            return "stop.circle.fill"
         case .completed:
             return "checkmark.circle.fill"
         case .failed:

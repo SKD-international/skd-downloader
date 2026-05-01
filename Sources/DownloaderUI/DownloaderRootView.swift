@@ -35,7 +35,14 @@ struct DownloaderRootView: View {
                 } label: {
                     Label("Start Queue", systemImage: "arrow.down.circle")
                 }
-                .disabled(appState.isDownloading || appState.queueSummary.queued == 0 && appState.queueSummary.failed == 0)
+                .disabled(!appState.canStartQueue)
+
+                Button {
+                    appState.stopDownloads()
+                } label: {
+                    Label("Stop", systemImage: "stop.circle")
+                }
+                .disabled(!appState.canStopDownloads)
 
                 Button {
                     appState.openOutputFolder()

@@ -10,11 +10,11 @@ struct DownloaderOverviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                heroSection
+            VStack(alignment: .leading, spacing: 18) {
+                commandHeader
                 composerSection
                 statsSection
-                previewSection
+                workbenchSection
             }
             .padding(24)
         }
@@ -25,6 +25,48 @@ struct DownloaderOverviewView: View {
 
     private var theme: DownloaderThemeStyle {
         DownloaderThemeStyle(preset: appState.themePreset)
+    }
+
+    private var commandHeader: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Download Workbench")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(theme.bodyText)
+
+                Text(appState.isBinaryInstalled ? appState.binaryPath : "yt-dlp unavailable")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                Task { await appState.startQueue() }
+            } label: {
+                Label("Start", systemImage: "play.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!appState.canStartQueue)
+
+            Button(role: .destructive) {
+                appState.stopDownloads()
+            } label: {
+                Label("Stop", systemImage: "stop.circle.fill")
+            }
+            .buttonStyle(.bordered)
+            .disabled(!appState.canStopDownloads)
+
+            Button {
+                appState.openOutputFolder()
+            } label: {
+                Label("Folder", systemImage: "folder")
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(20)
+        .downloaderPanel(theme: theme, tone: .strong, radius: 18)
     }
 
     private var heroSection: some View {
@@ -103,11 +145,11 @@ struct DownloaderOverviewView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("New Download")
+                    Text("Add URLs")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
-                    Text("Linear structure, Raycast energy. Queue rows stay compact and operational.")
+                    Text("Paste one URL per line, choose defaults, then queue everything in one pass.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
@@ -120,9 +162,19 @@ struct DownloaderOverviewView: View {
                 .buttonStyle(.bordered)
             }
 
-            TextField("Paste a video or playlist URL", text: $appState.urlInput)
-                .textFieldStyle(.roundedBorder)
+            TextEditor(text: $appState.urlInput)
                 .font(.system(size: 14, weight: .medium))
+                .frame(minHeight: 84)
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(theme.canvasBase.opacity(theme.isLight ? 0.55 : 0.5))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(theme.panelStroke, lineWidth: 1)
+                        }
+                }
 
             HStack(alignment: .top, spacing: 12) {
                 Picker("Mode", selection: $appState.selectedMode) {
@@ -177,15 +229,35 @@ struct DownloaderOverviewView: View {
                     Task { await appState.startQueue() }
                 }
                 .buttonStyle(.bordered)
-                .disabled(appState.isDownloading || (appState.queueSummary.queued == 0 && appState.queueSummary.failed == 0))
+                .disabled(!appState.canStartQueue)
+
+                Button("Stop") {
+                    appState.stopDownloads()
+                }
+                .buttonStyle(.bordered)
+                .disabled(!appState.canStopDownloads)
             }
 
-            Text(formatHint)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(theme.mutedText)
+            HStack(spacing: 10) {
+                Text(formatHint)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+
+                Spacer()
+
+                Button("Retry Failed") {
+                    appState.retryFailedAndStopped()
+                }
+                .buttonStyle(.borderless)
+
+                Button("Clear Finished") {
+                    appState.clearFinishedItems()
+                }
+                .buttonStyle(.borderless)
+            }
         }
         .padding(22)
-        .downloaderPanel(theme: theme, tone: .accent, radius: 24)
+        .downloaderPanel(theme: theme, tone: .accent, radius: 18)
     }
 
     private var statsSection: some View {
@@ -197,17 +269,9 @@ struct DownloaderOverviewView: View {
         }
     }
 
-    private var previewSection: some View {
+    private var workbenchSection: some View {
         HStack(alignment: .top, spacing: 18) {
-            previewColumn(
-                title: "Queue Preview",
-                emptyState: "Queue is empty.",
-                content: {
-                    ForEach(appState.queue.prefix(4)) { item in
-                        PreviewQueueRow(item: item, theme: theme)
-                    }
-                }
-            )
+            queueWorkbenchColumn
 
             previewColumn(
                 title: "Recent History",
@@ -219,6 +283,37 @@ struct DownloaderOverviewView: View {
                 }
             )
         }
+    }
+
+    private var queueWorkbenchColumn: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Queue")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(theme.bodyText)
+
+                Spacer()
+
+                Text("\(appState.queueSummary.total) jobs")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(theme.mutedText)
+            }
+
+            if appState.queue.isEmpty {
+                previewPlaceholder("Queue is empty.")
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(appState.queue.prefix(7)) { item in
+                        PreviewQueueRow(item: item, theme: theme) {
+                            appState.selection = .queue(item.id)
+                        } stop: {
+                            appState.stopDownload(item.id)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func previewColumn<Content: View>(title: String, emptyState: String, @ViewBuilder content: () -> Content) -> some View {
@@ -295,6 +390,8 @@ private struct SummaryMetricCard: View {
 private struct PreviewQueueRow: View {
     let item: DownloadQueueItem
     let theme: DownloaderThemeStyle
+    let select: () -> Void
+    let stop: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -315,12 +412,27 @@ private struct PreviewQueueRow: View {
 
             Spacer()
 
-            Text(item.status.title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(Capsule(style: .continuous).fill(theme.statusFill(for: item.status)))
-                .foregroundStyle(theme.bodyText)
+            if item.status == .downloading || item.status == .queued {
+                Button {
+                    stop()
+                } label: {
+                    Image(systemName: "stop.circle")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(theme.danger)
+            }
+
+            Button {
+                select()
+            } label: {
+                Text(item.status.title.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Capsule(style: .continuous).fill(theme.statusFill(for: item.status)))
+                    .foregroundStyle(theme.bodyText)
+            }
+            .buttonStyle(.plain)
         }
         .padding(14)
         .downloaderPanel(theme: theme, radius: 18)

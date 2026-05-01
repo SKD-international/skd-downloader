@@ -6,12 +6,13 @@ import Foundation
 enum QueueStatus: Equatable {
     case queued
     case downloading
+    case cancelled
     case completed
     case failed(String)
 
     var isRetryable: Bool {
         switch self {
-        case .queued, .failed:
+        case .queued, .cancelled, .failed:
             return true
         case .downloading, .completed:
             return false
@@ -40,6 +41,8 @@ enum QueueStatus: Equatable {
             return "Queued"
         case .downloading:
             return "Downloading"
+        case .cancelled:
+            return "Stopped"
         case .completed:
             return "Completed"
         case .failed:
@@ -123,6 +126,8 @@ public final class DownloaderAppState: ObservableObject {
     private let settingsStore: DownloadSettingsStore
     private let engine: YTDLPEngine
     private var cancellables: Set<AnyCancellable> = []
+    private var activeDownloadTokens: [UUID: DownloadCancellationToken] = [:]
+    private var shouldStopQueue = false
     private var didBootstrap = false
 
     public init(
@@ -171,6 +176,14 @@ public final class DownloaderAppState: ObservableObject {
             completed: queue.filter { $0.status.isCompleted }.count,
             failed: queue.filter { $0.status.errorMessage != nil }.count
         )
+    }
+
+    var canStartQueue: Bool {
+        !isDownloading && queue.contains { $0.status.isRetryable }
+    }
+
+    var canStopDownloads: Bool {
+        isDownloading || !activeDownloadTokens.isEmpty
     }
 
     var selectedQueueItem: DownloadQueueItem? {
@@ -224,8 +237,8 @@ public final class DownloaderAppState: ObservableObject {
     }
 
     func addURL() async {
-        let trimmed = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let rawInput = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawInput.isEmpty else {
             return
         }
 
@@ -237,16 +250,24 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         do {
-            let entries = try await engine.fetchInfo(url: trimmed, configuration: configuration)
-            let items = entries.map { entry in
-                DownloadQueueItem(
-                    url: entry.webpageURL ?? trimmed,
-                    title: entry.title,
-                    thumbnail: entry.thumbnail,
-                    mode: selectedMode,
-                    format: selectedMode == .video ? configuration.videoFormat : configuration.audioFormat,
-                    quality: selectedMode == .video ? configuration.videoQuality : configuration.audioBitrate
-                )
+            let urls = rawInput
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            var items: [DownloadQueueItem] = []
+            for url in urls {
+                let entries = try await engine.fetchInfo(url: url, configuration: configuration)
+                items.append(contentsOf: entries.map { entry in
+                    DownloadQueueItem(
+                        url: entry.webpageURL ?? url,
+                        title: entry.title,
+                        thumbnail: entry.thumbnail,
+                        mode: selectedMode,
+                        format: selectedMode == .video ? configuration.videoFormat : configuration.audioFormat,
+                        quality: selectedMode == .video ? configuration.videoQuality : configuration.audioBitrate
+                    )
+                })
             }
 
             queue.append(contentsOf: items)
@@ -272,9 +293,15 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         isDownloading = true
+        shouldStopQueue = false
         defer { isDownloading = false }
 
         for itemID in pendingIDs {
+            if shouldStopQueue {
+                statusMessage = "Queue stopped."
+                break
+            }
+
             await download(itemID: itemID)
         }
     }
@@ -292,12 +319,19 @@ public final class DownloaderAppState: ObservableObject {
         statusMessage = "Downloading \(queue[index].title)…"
 
         let item = queue[index]
+        let cancellationToken = DownloadCancellationToken()
+        activeDownloadTokens[itemID] = cancellationToken
+        defer {
+            activeDownloadTokens[itemID] = nil
+        }
+
         let result = await engine.startDownload(
             url: item.url,
             configuration: configuration,
             mode: item.mode,
             formatOverride: item.format,
-            qualityOverride: item.quality
+            qualityOverride: item.quality,
+            cancellationToken: cancellationToken
         ) { [weak self] line in
             Task { @MainActor in
                 self?.apply(line: line, for: itemID)
@@ -308,7 +342,12 @@ public final class DownloaderAppState: ObservableObject {
             return
         }
 
-        if result.exitCode == 0 {
+        if result.wasCancelled {
+            queue[refreshedIndex].status = .cancelled
+            queue[refreshedIndex].speed = "Stopped"
+            queue[refreshedIndex].eta = "—"
+            statusMessage = "Stopped \(queue[refreshedIndex].title)."
+        } else if result.exitCode == 0 {
             queue[refreshedIndex].status = .completed
             queue[refreshedIndex].progress = 100
             if queue[refreshedIndex].destination == nil {
@@ -332,6 +371,35 @@ public final class DownloaderAppState: ObservableObject {
         }
     }
 
+    func stopDownloads() {
+        guard canStopDownloads else {
+            statusMessage = "No active download to stop."
+            return
+        }
+
+        shouldStopQueue = true
+        activeDownloadTokens.values.forEach { $0.cancel() }
+        statusMessage = "Stopping active download…"
+    }
+
+    func stopDownload(_ itemID: UUID) {
+        if let token = activeDownloadTokens[itemID] {
+            shouldStopQueue = true
+            token.cancel()
+            statusMessage = "Stopping selected download…"
+            return
+        }
+
+        guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        if queue[index].status == .queued {
+            queue[index].status = .cancelled
+            statusMessage = "Stopped queued item."
+        }
+    }
+
     func retry(_ itemID: UUID) {
         guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
             return
@@ -345,7 +413,43 @@ public final class DownloaderAppState: ObservableObject {
         statusMessage = "Marked \(queue[index].title) for retry."
     }
 
+    func retryFailedAndStopped() {
+        var updatedCount = 0
+        for index in queue.indices {
+            switch queue[index].status {
+            case .failed, .cancelled:
+                queue[index].status = .queued
+                queue[index].progress = 0
+                queue[index].speed = "—"
+                queue[index].eta = "—"
+                updatedCount += 1
+            case .queued, .downloading, .completed:
+                break
+            }
+        }
+
+        statusMessage = updatedCount == 0 ? "No failed or stopped items to retry." : "Requeued \(updatedCount) item(s)."
+    }
+
+    func clearFinishedItems() {
+        let removableIDs = Set(queue.filter { item in
+            item.status.isCompleted || item.status.errorMessage != nil || item.status == .cancelled
+        }.map(\.id))
+
+        guard !removableIDs.isEmpty else {
+            statusMessage = "No finished items to clear."
+            return
+        }
+
+        queue.removeAll { removableIDs.contains($0.id) }
+        if case let .queue(id) = selection, removableIDs.contains(id) {
+            selection = .overview
+        }
+        statusMessage = "Cleared \(removableIDs.count) finished item(s)."
+    }
+
     func removeQueueItem(_ itemID: UUID) {
+        stopDownload(itemID)
         queue.removeAll { $0.id == itemID }
         if case .queue(itemID) = selection {
             selection = .overview

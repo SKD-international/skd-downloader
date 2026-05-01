@@ -154,6 +154,22 @@ func cookiePermissionErrorsAreRetryableWithoutCookies() {
 }
 
 @Test
+func cancellationTokenTracksStopRequests() {
+    let token = DownloadCancellationToken()
+
+    #expect(!token.isCancelled)
+    token.cancel()
+    #expect(token.isCancelled)
+}
+
+@Test
+func commandResultDefaultsToNotCancelled() {
+    let result = DownloadCommandResult(exitCode: 0, destination: "/tmp/video.mp4", output: "ok")
+
+    #expect(!result.wasCancelled)
+}
+
+@Test
 func homebrewBinaryPathsArePreferredBeforeDevelopmentWrappers() {
     let repo = URL(fileURLWithPath: "/tmp/skd-downloader", isDirectory: true)
 
