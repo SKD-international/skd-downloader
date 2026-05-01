@@ -1,6 +1,6 @@
 cask "skd-downloader" do
-  version "0.9.0-beta.3"
-  sha256 "af966c31aef8fecb0c2c6a8d3217b515514d0dac79597cda07179b79d6c21f34"
+  version "0.9.0-beta.4"
+  sha256 "709de93b9c905d0f72350b480ac3c44c44c5f48d5e1543e6caecb7174b27ec3d"
 
   url "https://github.com/SKD-international/skd-downloader/releases/download/v#{version}/SKD.Downloader.Native-#{version}-mac.zip"
   name "SKD Downloader"

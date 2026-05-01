@@ -68,6 +68,7 @@ struct DownloadQueueItem: Identifiable, Equatable {
     var selectedFormatID: String?
     var isLoadingFormats: Bool
     var formatError: String?
+    var activityLog: [DownloadActivityLogEntry]
 
     init(
         id: UUID = UUID(),
@@ -94,6 +95,23 @@ struct DownloadQueueItem: Identifiable, Equatable {
         self.selectedFormatID = nil
         self.isLoadingFormats = false
         self.formatError = nil
+        self.activityLog = []
+    }
+}
+
+struct DownloadActivityLogEntry: Identifiable, Equatable {
+    let id: UUID
+    let timestamp: Date
+    let message: String
+
+    init(id: UUID = UUID(), timestamp: Date = .now, message: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.message = message
+    }
+
+    var timestampLabel: String {
+        timestamp.formatted(date: .omitted, time: .standard)
     }
 }
 
@@ -137,6 +155,7 @@ public final class DownloaderAppState: ObservableObject {
     private var activeDownloadTokens: [UUID: DownloadCancellationToken] = [:]
     private var shouldStopQueue = false
     private var didBootstrap = false
+    private static let maxActivityLogLines = 300
 
     public init(
         defaults: UserDefaults = .standard,
@@ -324,9 +343,13 @@ public final class DownloaderAppState: ObservableObject {
         queue[index].progress = 0
         queue[index].speed = "—"
         queue[index].eta = "—"
+        queue[index].activityLog.removeAll()
         statusMessage = "Downloading \(queue[index].title)…"
 
         let item = queue[index]
+        appendActivityLog("Starting \(item.mode.rawValue) download.", for: itemID)
+        appendActivityLog("Command: \(commandPreview(for: item))", for: itemID)
+
         let cancellationToken = DownloadCancellationToken()
         activeDownloadTokens[itemID] = cancellationToken
         defer {
@@ -355,6 +378,7 @@ public final class DownloaderAppState: ObservableObject {
             queue[refreshedIndex].status = .cancelled
             queue[refreshedIndex].speed = "Stopped"
             queue[refreshedIndex].eta = "—"
+            appendActivityLog("Download stopped by user.", for: itemID)
             statusMessage = "Stopped \(queue[refreshedIndex].title)."
         } else if result.exitCode == 0 {
             queue[refreshedIndex].status = .completed
@@ -362,6 +386,7 @@ public final class DownloaderAppState: ObservableObject {
             if queue[refreshedIndex].destination == nil {
                 queue[refreshedIndex].destination = result.destination
             }
+            appendActivityLog("Download completed.", for: itemID)
             statusMessage = "Completed \(queue[refreshedIndex].title)."
 
             if let destination = queue[refreshedIndex].destination {
@@ -376,6 +401,7 @@ public final class DownloaderAppState: ObservableObject {
             }
         } else {
             queue[refreshedIndex].status = .failed(result.output)
+            appendActivityLog("Process failed with exit code \(result.exitCode).", for: itemID)
             statusMessage = result.output.isEmpty ? "Download failed." : result.output
         }
     }
@@ -460,6 +486,35 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         copyToClipboard(commandPreview(for: item), label: "command")
+    }
+
+    func activityLogText(for item: DownloadQueueItem) -> String {
+        item.activityLog
+            .map { "[\($0.timestampLabel)] \($0.message)" }
+            .joined(separator: "\n")
+    }
+
+    func copyActivityLog(for itemID: UUID) {
+        guard let item = queue.first(where: { $0.id == itemID }) else {
+            return
+        }
+
+        let text = activityLogText(for: item)
+        guard !text.isEmpty else {
+            statusMessage = "Activity log is empty."
+            return
+        }
+
+        copyToClipboard(text, label: "activity log")
+    }
+
+    func clearActivityLog(for itemID: UUID) {
+        guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        queue[index].activityLog.removeAll()
+        statusMessage = "Cleared activity log."
     }
 
     func stopDownloads() {
@@ -619,6 +674,8 @@ public final class DownloaderAppState: ObservableObject {
             return
         }
 
+        appendActivityLog(line, for: itemID)
+
         if let progress = YTDLPOutputParser.progress(from: line) {
             queue[index].progress = progress.percent
             queue[index].speed = progress.speed
@@ -631,6 +688,18 @@ public final class DownloaderAppState: ObservableObject {
 
         if line.contains("ERROR") {
             queue[index].status = .failed(line)
+        }
+    }
+
+    private func appendActivityLog(_ message: String, for itemID: UUID) {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty, let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        queue[index].activityLog.append(DownloadActivityLogEntry(message: trimmedMessage))
+        if queue[index].activityLog.count > Self.maxActivityLogLines {
+            queue[index].activityLog.removeFirst(queue[index].activityLog.count - Self.maxActivityLogLines)
         }
     }
 

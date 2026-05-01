@@ -17,6 +17,7 @@ struct DownloaderQueueDetailView: View {
                 progressCard
                 formatInspectorCard
                 commandPreviewCard
+                activityLogCard
                 metadataCard
             }
             .padding(24)
@@ -253,6 +254,67 @@ struct DownloaderQueueDetailView: View {
         .downloaderPanel(theme: theme, radius: 22)
     }
 
+    private var activityLogCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Activity Log")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(theme.bodyText)
+
+                    Text("\(item.activityLog.count) captured line(s)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.mutedText)
+                }
+
+                Spacer()
+
+                Button {
+                    appState.copyActivityLog(for: item.id)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .disabled(item.activityLog.isEmpty)
+
+                Button(role: .destructive) {
+                    appState.clearActivityLog(for: item.id)
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+                .disabled(item.activityLog.isEmpty || item.status == .downloading)
+            }
+
+            if item.activityLog.isEmpty {
+                Text("Download process output will appear here once this item starts.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(item.activityLog.suffix(80))) { entry in
+                            ActivityLogRow(entry: entry, theme: theme)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                }
+                .frame(minHeight: 140, maxHeight: 260)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(theme.canvasBase.opacity(theme.isLight ? 0.56 : 0.44))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(theme.panelStroke, lineWidth: 1)
+                        }
+                }
+            }
+        }
+        .padding(22)
+        .downloaderPanel(theme: theme, radius: 22)
+    }
+
     private var metadataCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Metadata")
@@ -387,6 +449,27 @@ private struct LabeledValue: View {
                 .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ActivityLogRow: View {
+    let entry: DownloadActivityLogEntry
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(entry.timestampLabel)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(theme.mutedText)
+                .frame(width: 78, alignment: .leading)
+
+            Text(entry.message)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(theme.bodyText)
+                .textSelection(.enabled)
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
