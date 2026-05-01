@@ -160,6 +160,7 @@ SKD Downloader Native $VERSION
 - Uses Homebrew-managed yt-dlp/ffmpeg/ffprobe through the cask dependencies.
 - Adds resilient cookie handling with fallback when browser cookie access is denied.
 - Adds native queue stop controls, format inspection, manual yt-dlp format selection, copyable command previews, and per-job activity logs.
+- Adds download archive duplicate protection, info/description sidecar metadata, embedded chapters, and fragment worker tuning.
 - Signed with Developer ID$(if [[ "$NOTARIZE" -eq 1 ]]; then echo " and notarized"; else echo ""; fi).
 
 Artifact:

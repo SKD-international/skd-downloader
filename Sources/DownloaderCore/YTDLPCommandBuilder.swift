@@ -65,8 +65,20 @@ public enum YTDLPCommandBuilder {
             args += ["--write-thumbnail"]
         }
 
+        if configuration.writeInfoJSON {
+            args += ["--write-info-json"]
+        }
+
+        if configuration.writeDescription {
+            args += ["--write-description"]
+        }
+
         if configuration.writeTags && mode == .audio {
             args += ["--embed-metadata"]
+        }
+
+        if configuration.embedChapters && mode == .video {
+            args += ["--embed-chapters"]
         }
 
         args += cookieArguments(url: url, configuration: configuration)
@@ -75,12 +87,25 @@ public enum YTDLPCommandBuilder {
             args += ["-r", "\(configuration.bandwidthLimit)K"]
         }
 
+        if configuration.concurrentFragments > 1 {
+            args += ["-N", "\(min(max(configuration.concurrentFragments, 1), 16))"]
+        }
+
         if !configuration.proxy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             args += ["--proxy", configuration.proxy]
         }
 
         if configuration.skipExisting {
             args += ["--no-overwrites"]
+        }
+
+        if configuration.downloadArchiveEnabled {
+            let archiveURL = configuration.resolvedDownloadArchiveURL()
+            try? FileManager.default.createDirectory(
+                at: archiveURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            args += ["--download-archive", archiveURL.path]
         }
 
         if configuration.removeEmoji {

@@ -615,6 +615,18 @@ public final class DownloaderAppState: ObservableObject {
         NSWorkspace.shared.open(destination)
     }
 
+    func openDownloadArchiveFolder() {
+        let archiveURL = configuration.resolvedDownloadArchiveURL()
+        let directory = archiveURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(directory)
+    }
+
+    func resetDownloadArchivePath() {
+        configuration.downloadArchivePath = ""
+        statusMessage = "Using default download archive path."
+    }
+
     func pickFolder(for mode: DownloadMode) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true

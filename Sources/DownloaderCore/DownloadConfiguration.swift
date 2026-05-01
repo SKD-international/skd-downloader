@@ -73,6 +73,42 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
     public var cookiesBrowser: CookieBrowser
     public var cookiesBrowserConfigured: Bool
     public var proxy: String
+    public var writeInfoJSON: Bool
+    public var writeDescription: Bool
+    public var embedChapters: Bool
+    public var downloadArchiveEnabled: Bool
+    public var downloadArchivePath: String
+    public var concurrentFragments: Int
+
+    enum CodingKeys: String, CodingKey {
+        case downloadFolderVideo
+        case downloadFolderAudio
+        case concurrentDownloads
+        case bandwidthLimit
+        case videoQuality
+        case videoResolution
+        case videoFormat
+        case audioFormat
+        case audioBitrate
+        case filenameTemplate
+        case skipExisting
+        case removeEmoji
+        case sponsorBlock
+        case embedSubtitles
+        case subtitleLangs
+        case embedThumbnail
+        case saveThumbnail
+        case writeTags
+        case cookiesBrowser
+        case cookiesBrowserConfigured
+        case proxy
+        case writeInfoJSON
+        case writeDescription
+        case embedChapters
+        case downloadArchiveEnabled
+        case downloadArchivePath
+        case concurrentFragments
+    }
 
     public init(
         downloadFolderVideo: String = "",
@@ -95,7 +131,13 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         writeTags: Bool = true,
         cookiesBrowser: CookieBrowser = .none,
         cookiesBrowserConfigured: Bool = true,
-        proxy: String = ""
+        proxy: String = "",
+        writeInfoJSON: Bool = false,
+        writeDescription: Bool = false,
+        embedChapters: Bool = true,
+        downloadArchiveEnabled: Bool = false,
+        downloadArchivePath: String = "",
+        concurrentFragments: Int = 1
     ) {
         self.downloadFolderVideo = downloadFolderVideo
         self.downloadFolderAudio = downloadFolderAudio
@@ -118,6 +160,45 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         self.cookiesBrowser = cookiesBrowser
         self.cookiesBrowserConfigured = cookiesBrowserConfigured
         self.proxy = proxy
+        self.writeInfoJSON = writeInfoJSON
+        self.writeDescription = writeDescription
+        self.embedChapters = embedChapters
+        self.downloadArchiveEnabled = downloadArchiveEnabled
+        self.downloadArchivePath = downloadArchivePath
+        self.concurrentFragments = concurrentFragments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let defaults = DownloadConfiguration()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.downloadFolderVideo = try container.decodeIfPresent(String.self, forKey: .downloadFolderVideo) ?? defaults.downloadFolderVideo
+        self.downloadFolderAudio = try container.decodeIfPresent(String.self, forKey: .downloadFolderAudio) ?? defaults.downloadFolderAudio
+        self.concurrentDownloads = try container.decodeIfPresent(Int.self, forKey: .concurrentDownloads) ?? defaults.concurrentDownloads
+        self.bandwidthLimit = try container.decodeIfPresent(Int.self, forKey: .bandwidthLimit) ?? defaults.bandwidthLimit
+        self.videoQuality = try container.decodeIfPresent(String.self, forKey: .videoQuality) ?? defaults.videoQuality
+        self.videoResolution = try container.decodeIfPresent(String.self, forKey: .videoResolution) ?? defaults.videoResolution
+        self.videoFormat = try container.decodeIfPresent(String.self, forKey: .videoFormat) ?? defaults.videoFormat
+        self.audioFormat = try container.decodeIfPresent(String.self, forKey: .audioFormat) ?? defaults.audioFormat
+        self.audioBitrate = try container.decodeIfPresent(String.self, forKey: .audioBitrate) ?? defaults.audioBitrate
+        self.filenameTemplate = try container.decodeIfPresent(String.self, forKey: .filenameTemplate) ?? defaults.filenameTemplate
+        self.skipExisting = try container.decodeIfPresent(Bool.self, forKey: .skipExisting) ?? defaults.skipExisting
+        self.removeEmoji = try container.decodeIfPresent(Bool.self, forKey: .removeEmoji) ?? defaults.removeEmoji
+        self.sponsorBlock = try container.decodeIfPresent(Bool.self, forKey: .sponsorBlock) ?? defaults.sponsorBlock
+        self.embedSubtitles = try container.decodeIfPresent(Bool.self, forKey: .embedSubtitles) ?? defaults.embedSubtitles
+        self.subtitleLangs = try container.decodeIfPresent(String.self, forKey: .subtitleLangs) ?? defaults.subtitleLangs
+        self.embedThumbnail = try container.decodeIfPresent(Bool.self, forKey: .embedThumbnail) ?? defaults.embedThumbnail
+        self.saveThumbnail = try container.decodeIfPresent(Bool.self, forKey: .saveThumbnail) ?? defaults.saveThumbnail
+        self.writeTags = try container.decodeIfPresent(Bool.self, forKey: .writeTags) ?? defaults.writeTags
+        self.cookiesBrowser = try container.decodeIfPresent(CookieBrowser.self, forKey: .cookiesBrowser) ?? defaults.cookiesBrowser
+        self.cookiesBrowserConfigured = try container.decodeIfPresent(Bool.self, forKey: .cookiesBrowserConfigured) ?? defaults.cookiesBrowserConfigured
+        self.proxy = try container.decodeIfPresent(String.self, forKey: .proxy) ?? defaults.proxy
+        self.writeInfoJSON = try container.decodeIfPresent(Bool.self, forKey: .writeInfoJSON) ?? defaults.writeInfoJSON
+        self.writeDescription = try container.decodeIfPresent(Bool.self, forKey: .writeDescription) ?? defaults.writeDescription
+        self.embedChapters = try container.decodeIfPresent(Bool.self, forKey: .embedChapters) ?? defaults.embedChapters
+        self.downloadArchiveEnabled = try container.decodeIfPresent(Bool.self, forKey: .downloadArchiveEnabled) ?? defaults.downloadArchiveEnabled
+        self.downloadArchivePath = try container.decodeIfPresent(String.self, forKey: .downloadArchivePath) ?? defaults.downloadArchivePath
+        self.concurrentFragments = try container.decodeIfPresent(Int.self, forKey: .concurrentFragments) ?? defaults.concurrentFragments
     }
 
     public func effectiveCookiesBrowser(
@@ -146,6 +227,20 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads", isDirectory: true)
 
         return downloads.appendingPathComponent("SKD Downloader", isDirectory: true)
+    }
+
+    public func resolvedDownloadArchiveURL(fileManager: FileManager = .default) -> URL {
+        let configuredPath = downloadArchivePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !configuredPath.isEmpty {
+            return URL(fileURLWithPath: (configuredPath as NSString).expandingTildeInPath)
+        }
+
+        let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support", isDirectory: true)
+
+        return supportDirectory
+            .appendingPathComponent("skd-downloader-native", isDirectory: true)
+            .appendingPathComponent("download-archive.txt")
     }
 }
 

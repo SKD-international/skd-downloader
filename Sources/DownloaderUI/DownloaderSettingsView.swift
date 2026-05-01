@@ -157,8 +157,39 @@ struct DownloaderSettingsView: View {
                 Toggle("Embed Thumbnail", isOn: $appState.configuration.embedThumbnail)
                 Toggle("Save Thumbnail File", isOn: $appState.configuration.saveThumbnail)
                 Toggle("Write Audio Tags", isOn: $appState.configuration.writeTags)
+                Toggle("Write Info JSON", isOn: $appState.configuration.writeInfoJSON)
+                Toggle("Write Description File", isOn: $appState.configuration.writeDescription)
+                Toggle("Embed Chapters", isOn: $appState.configuration.embedChapters)
                 Toggle("Skip Existing Files", isOn: $appState.configuration.skipExisting)
                 Toggle("Remove Emoji", isOn: $appState.configuration.removeEmoji)
+            }
+
+            Section("Archive") {
+                Toggle("Remember downloaded media", isOn: $appState.configuration.downloadArchiveEnabled)
+
+                TextField("Archive File", text: $appState.configuration.downloadArchivePath)
+                    .disabled(!appState.configuration.downloadArchiveEnabled)
+
+                HStack {
+                    Button("Open Archive Folder") {
+                        appState.openDownloadArchiveFolder()
+                    }
+                    .disabled(!appState.configuration.downloadArchiveEnabled)
+
+                    Button("Use Default Path") {
+                        appState.resetDownloadArchivePath()
+                    }
+                    .disabled(!appState.configuration.downloadArchiveEnabled)
+                }
+            }
+
+            Section("Performance") {
+                Stepper(value: $appState.configuration.concurrentFragments, in: 1...16) {
+                    Text("Fragment workers: \(appState.configuration.concurrentFragments)")
+                }
+
+                Text("Used for segmented HLS/DASH downloads through yt-dlp -N.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Subtitles") {

@@ -107,6 +107,92 @@ func selectedFormatIDOverridesAutomaticVideoQualitySelection() {
 }
 
 @Test
+func archiveSidecarAndFragmentArgsAreIncludedWhenEnabled() {
+    let archivePath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("skd-archive-\(UUID().uuidString).txt")
+        .path
+    let config = DownloadConfiguration(
+        writeInfoJSON: true,
+        writeDescription: true,
+        embedChapters: true,
+        downloadArchiveEnabled: true,
+        downloadArchivePath: archivePath,
+        concurrentFragments: 8
+    )
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: config,
+        mode: .video,
+        formatOverride: "mp4",
+        qualityOverride: "highest"
+    )
+
+    #expect(args.contains("--write-info-json"))
+    #expect(args.contains("--write-description"))
+    #expect(args.contains("--embed-chapters"))
+    #expect(args.contains("--download-archive"))
+    #expect(args.contains(archivePath))
+    #expect(args.contains("-N"))
+    #expect(args.contains("8"))
+}
+
+@Test
+func audioDownloadsDoNotIncludeVideoChapterEmbedding() {
+    let config = DownloadConfiguration(embedChapters: true)
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: config,
+        mode: .audio,
+        formatOverride: "mp3",
+        qualityOverride: "192"
+    )
+
+    #expect(!args.contains("--embed-chapters"))
+}
+
+@Test
+func oldConfigurationJSONDecodesWithNewDefaults() throws {
+    let data = Data(
+        """
+        {
+          "downloadFolderVideo": "/tmp/videos",
+          "downloadFolderAudio": "/tmp/audio",
+          "concurrentDownloads": 2,
+          "bandwidthLimit": 0,
+          "videoQuality": "720",
+          "videoResolution": "720",
+          "videoFormat": "mp4",
+          "audioFormat": "m4a",
+          "audioBitrate": "256",
+          "filenameTemplate": "title",
+          "skipExisting": true,
+          "removeEmoji": false,
+          "sponsorBlock": true,
+          "embedSubtitles": false,
+          "subtitleLangs": "en",
+          "embedThumbnail": true,
+          "saveThumbnail": false,
+          "writeTags": true,
+          "cookiesBrowser": "none",
+          "cookiesBrowserConfigured": true,
+          "proxy": ""
+        }
+        """.utf8
+    )
+
+    let config = try JSONDecoder().decode(DownloadConfiguration.self, from: data)
+
+    #expect(config.downloadFolderVideo == "/tmp/videos")
+    #expect(config.skipExisting)
+    #expect(!config.writeInfoJSON)
+    #expect(!config.writeDescription)
+    #expect(config.embedChapters)
+    #expect(!config.downloadArchiveEnabled)
+    #expect(config.downloadArchivePath.isEmpty)
+    #expect(config.concurrentFragments == 1)
+}
+
+@Test
 func shellPreviewQuotesArgumentsWithSpacesAndApostrophes() {
     let preview = YTDLPCommandBuilder.shellPreview(
         arguments: ["--output", "/tmp/SKD Downloads/%(title)s.%(ext)s", "https://example.com/watch?v=it'is"]
