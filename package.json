@@ -12,6 +12,8 @@
     "dist:win": "electron-builder --win",
     "native:build": "./script/build_and_run.sh --build",
     "native:package": "./script/build_and_run.sh --package",
+    "native:notary:preflight": "./script/release_native.sh --preflight",
+    "native:notary:setup": "./script/release_native.sh --setup-profile",
     "native:release": "./script/release_native.sh",
     "native:release:upload": "./script/release_native.sh --notarize --upload",
     "native:test": "swift test",

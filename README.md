@@ -61,8 +61,19 @@ This runs the Node and Swift test suites, builds `SKD Downloader.app`, signs it 
 To upload the native artifact to GitHub:
 
 ```bash
-export SKD_NOTARY_PROFILE=<notarytool-keychain-profile>
+export SKD_NOTARY_PROFILE=skd-downloader-notary
+npm run native:notary:preflight
 npm run native:release:upload
+```
+
+If the notarytool profile does not exist yet, create it from an interactive
+terminal so macOS can prompt securely for the app-specific Apple ID password:
+
+```bash
+export SKD_NOTARY_PROFILE=<notarytool-keychain-profile>
+export SKD_NOTARY_APPLE_ID=<apple-id>
+export SKD_NOTARY_TEAM_ID=<developer-team-id>
+npm run native:notary:setup
 ```
 
 ## License

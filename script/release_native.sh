@@ -10,7 +10,14 @@ ASSET_PATH="$ROOT_DIR/dist/native/$ASSET_NAME"
 NOTES_PATH="$ROOT_DIR/dist/native/release-notes-$VERSION.md"
 UPLOAD=0
 NOTARIZE=0
+PREFLIGHT=0
+SETUP_PROFILE=0
 VERIFY_DIR=""
+NOTARY_PROFILE="${SKD_NOTARY_PROFILE:-}"
+NOTARY_APPLE_ID="${SKD_NOTARY_APPLE_ID:-}"
+NOTARY_TEAM_ID="${SKD_NOTARY_TEAM_ID:-}"
+NOTARY_PASSWORD="${SKD_NOTARY_PASSWORD:-}"
+NOTARY_SYNC="${SKD_NOTARY_SYNC:-0}"
 
 cleanup() {
   if [[ -n "$VERIFY_DIR" ]]; then
@@ -36,6 +43,11 @@ update_cask_sha() {
 usage() {
   cat <<EOF
 usage: $0 [--notarize] [--upload]
+       $0 --preflight
+       SKD_NOTARY_PROFILE=<profile> \\
+         SKD_NOTARY_APPLE_ID=<apple-id> \\
+         SKD_NOTARY_TEAM_ID=<team-id> \\
+         $0 --setup-profile
 
 Builds and verifies the native macOS release artifact.
 
@@ -43,6 +55,11 @@ Environment:
   SKD_GITHUB_REPO          GitHub repo for release uploads. Default: $REPO
   SKD_CODESIGN_IDENTITY   Codesign identity. Defaults to first Developer ID Application identity.
   SKD_NOTARY_PROFILE      notarytool keychain profile used by --notarize.
+  SKD_NOTARY_APPLE_ID     Apple ID used by --setup-profile.
+  SKD_NOTARY_TEAM_ID      Developer Team ID used by --setup-profile.
+  SKD_NOTARY_PASSWORD     Optional app-specific password. Omit it for
+                           notarytool's secure prompt in an interactive shell.
+  SKD_NOTARY_SYNC=1       Store the notarytool profile in iCloud Keychain.
   SKD_ALLOW_UNNOTARIZED_UPLOAD=1
                            Allow --upload without --notarize.
   SKD_SKIP_CODESIGN=1     Skip codesigning for local debugging only.
@@ -50,7 +67,131 @@ Environment:
 Options:
   --notarize              Submit the zip to Apple notarization, staple the app, and rebuild the zip.
   --upload                Create or update GitHub release $TAG with $ASSET_NAME.
+  --preflight             Validate signing/notarization tools and keychain profile.
+  --setup-profile         Create and validate a notarytool keychain profile.
 EOF
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+require_tool() {
+  local label="$1"
+  local executable="$2"
+
+  if ! command -v "$executable" >/dev/null 2>&1; then
+    die "$label not found on PATH."
+  fi
+}
+
+require_xcrun_tool() {
+  local tool="$1"
+
+  if ! xcrun --find "$tool" >/dev/null 2>&1; then
+    die "xcrun could not find '$tool'. Select full Xcode with sudo xcode-select -s /Applications/Xcode.app/Contents/Developer."
+  fi
+}
+
+require_full_xcode() {
+  local developer_dir=""
+
+  developer_dir="$(xcode-select -p 2>/dev/null || true)"
+  if [[ -z "$developer_dir" ]]; then
+    die "xcode-select has no active developer directory."
+  fi
+
+  if [[ "$developer_dir" != *"/Xcode.app/Contents/Developer" ]]; then
+    die "full Xcode is required, but xcode-select points to '$developer_dir'."
+  fi
+
+  echo "  Xcode:      $developer_dir"
+}
+
+require_notary_profile() {
+  if [[ -z "$NOTARY_PROFILE" ]]; then
+    echo "ERROR: SKD_NOTARY_PROFILE is required." >&2
+    echo "" >&2
+    usage >&2
+    exit 2
+  fi
+}
+
+require_notary_setup_inputs() {
+  require_notary_profile
+
+  if [[ -z "$NOTARY_APPLE_ID" ]]; then
+    die "SKD_NOTARY_APPLE_ID is required for --setup-profile."
+  fi
+
+  if [[ -z "$NOTARY_TEAM_ID" ]]; then
+    die "SKD_NOTARY_TEAM_ID is required for --setup-profile."
+  fi
+}
+
+run_notary_preflight() {
+  require_notary_profile
+  require_tool "codesign" "codesign"
+  require_tool "spctl" "spctl"
+  require_tool "xcode-select" "xcode-select"
+  require_tool "xcrun" "xcrun"
+  require_full_xcode
+  require_xcrun_tool "notarytool"
+  require_xcrun_tool "stapler"
+
+  echo "  Profile:    $NOTARY_PROFILE"
+  if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" --output-format json --no-progress >/dev/null; then
+    echo "" >&2
+    echo "ERROR: notarytool profile '$NOTARY_PROFILE' is not usable." >&2
+    echo "       Create it with '$0 --setup-profile', then rerun." >&2
+    exit 1
+  fi
+  echo "  notarytool: profile accepted"
+}
+
+run_notary_profile_setup() {
+  require_notary_setup_inputs
+  require_tool "xcode-select" "xcode-select"
+  require_tool "xcrun" "xcrun"
+  require_full_xcode
+  require_xcrun_tool "notarytool"
+
+  local command=(
+    xcrun notarytool store-credentials "$NOTARY_PROFILE"
+    --apple-id "$NOTARY_APPLE_ID"
+    --team-id "$NOTARY_TEAM_ID"
+    --validate
+  )
+
+  if [[ "$NOTARY_SYNC" == "1" ]]; then
+    command+=(--sync)
+  fi
+
+  if [[ -n "$NOTARY_PASSWORD" ]]; then
+    command+=(--password "$NOTARY_PASSWORD")
+  else
+    if [[ ! -t 0 ]]; then
+      die "SKD_NOTARY_PASSWORD is required for non-interactive --setup-profile. Run from a terminal for notarytool's secure prompt, or provide an app-specific password through the environment."
+    fi
+    echo "  Password:   not set; notarytool will prompt securely."
+  fi
+
+  echo "Creating notarytool keychain profile:"
+  echo "  Profile:    $NOTARY_PROFILE"
+  echo "  Apple ID:   $NOTARY_APPLE_ID"
+  echo "  Team ID:    $NOTARY_TEAM_ID"
+  if [[ "$NOTARY_SYNC" == "1" ]]; then
+    echo "  Keychain:   iCloud sync"
+  else
+    echo "  Keychain:   default local keychain"
+  fi
+
+  "${command[@]}"
+
+  echo ""
+  echo "Validating saved notarytool profile..."
+  run_notary_preflight
 }
 
 while [[ $# -gt 0 ]]; do
@@ -61,6 +202,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --upload)
       UPLOAD=1
+      shift
+      ;;
+    --preflight)
+      PREFLIGHT=1
+      shift
+      ;;
+    --setup-profile)
+      SETUP_PROFILE=1
       shift
       ;;
     -h|--help)
@@ -76,6 +225,29 @@ done
 
 cd "$ROOT_DIR"
 
+if [[ "$PREFLIGHT" -eq 1 && $((UPLOAD + NOTARIZE + SETUP_PROFILE)) -ne 0 ]]; then
+  echo "--preflight must be run by itself." >&2
+  exit 2
+fi
+
+if [[ "$SETUP_PROFILE" -eq 1 && $((UPLOAD + NOTARIZE + PREFLIGHT)) -ne 0 ]]; then
+  echo "--setup-profile must be run by itself." >&2
+  exit 2
+fi
+
+if [[ "$PREFLIGHT" -eq 1 ]]; then
+  echo "Checking SKD Downloader notarization prerequisites..."
+  run_notary_preflight
+  echo "Notarization preflight passed."
+  exit 0
+fi
+
+if [[ "$SETUP_PROFILE" -eq 1 ]]; then
+  run_notary_profile_setup
+  echo "Notary profile setup passed."
+  exit 0
+fi
+
 if [[ "$UPLOAD" -eq 1 && "$NOTARIZE" -ne 1 && "${SKD_ALLOW_UNNOTARIZED_UPLOAD:-0}" != "1" ]]; then
   echo "--upload requires --notarize for release builds." >&2
   echo "Set SKD_ALLOW_UNNOTARIZED_UPLOAD=1 only for a deliberate unnotarized beta." >&2
@@ -85,6 +257,11 @@ fi
 if [[ "$NOTARIZE" -eq 1 && -z "${SKD_NOTARY_PROFILE:-}" ]]; then
   echo "SKD_NOTARY_PROFILE is required for --notarize" >&2
   exit 1
+fi
+
+if [[ "$NOTARIZE" -eq 1 ]]; then
+  echo "Checking SKD Downloader notarization prerequisites..."
+  run_notary_preflight
 fi
 
 npm test
