@@ -370,12 +370,13 @@ if [[ "$UPLOAD" -eq 1 ]]; then
       --target "$(git rev-parse HEAD)"
   fi
 
-  ASSET_ID="$(gh release view "$TAG" \
+  ASSET_API_URL="$(gh release view "$TAG" \
     --repo "$REPO" \
     --json assets \
-    --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .id" \
+    --jq ".assets[] | select(.name == \"$ASSET_NAME\") | .apiUrl" \
     | head -n 1)"
-  if [[ -z "$ASSET_ID" ]]; then
+  ASSET_ID="${ASSET_API_URL##*/}"
+  if [[ -z "$ASSET_API_URL" || ! "$ASSET_ID" =~ ^[0-9]+$ ]]; then
     echo "could not resolve uploaded asset id for $ASSET_NAME" >&2
     exit 1
   fi
