@@ -67,4 +67,45 @@ public enum YTDLPOutputParser {
             return try decoder.decode(VideoInfo.self, from: data)
         }
     }
+
+    public static func formatOptions(from output: String) throws -> [YTDLPFormatOption] {
+        let decoder = JSONDecoder()
+        let entries = output
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        var options: [YTDLPFormatOption] = []
+        var decodedPayload = false
+        var lastError: Error?
+
+        for entry in entries {
+            let data = Data(entry.utf8)
+            do {
+                let payload = try decoder.decode(FormatPayload.self, from: data)
+                decodedPayload = true
+                options.append(contentsOf: payload.formats ?? [])
+            } catch {
+                lastError = error
+            }
+        }
+
+        if !decodedPayload, let lastError {
+            throw lastError
+        }
+
+        return options
+            .filter { !$0.id.isEmpty && ($0.hasVideo || $0.hasAudio) }
+            .sorted { lhs, rhs in
+                if lhs.sortScore == rhs.sortScore {
+                    return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
+                }
+
+                return lhs.sortScore > rhs.sortScore
+            }
+    }
+}
+
+private struct FormatPayload: Decodable {
+    let formats: [YTDLPFormatOption]?
 }

@@ -159,6 +159,7 @@ SKD Downloader Native $VERSION
 - Native Swift macOS app bundle for Homebrew cask distribution.
 - Uses Homebrew-managed yt-dlp/ffmpeg/ffprobe through the cask dependencies.
 - Adds resilient cookie handling with fallback when browser cookie access is denied.
+- Adds native queue stop controls, format inspection, manual yt-dlp format selection, and copyable command previews.
 - Signed with Developer ID$(if [[ "$NOTARIZE" -eq 1 ]]; then echo " and notarized"; else echo ""; fi).
 
 Artifact:

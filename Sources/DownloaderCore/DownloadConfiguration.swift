@@ -173,6 +173,164 @@ public struct VideoInfo: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
+public struct YTDLPFormatOption: Decodable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let extensionName: String?
+    public let resolution: String?
+    public let height: Int?
+    public let fps: Double?
+    public let videoCodec: String?
+    public let audioCodec: String?
+    public let filesize: Int64?
+    public let approximateFilesize: Int64?
+    public let totalBitrate: Double?
+    public let formatNote: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "format_id"
+        case extensionName = "ext"
+        case resolution
+        case height
+        case fps
+        case videoCodec = "vcodec"
+        case audioCodec = "acodec"
+        case filesize
+        case approximateFilesize = "filesize_approx"
+        case totalBitrate = "tbr"
+        case formatNote = "format_note"
+    }
+
+    public init(
+        id: String,
+        extensionName: String? = nil,
+        resolution: String? = nil,
+        height: Int? = nil,
+        fps: Double? = nil,
+        videoCodec: String? = nil,
+        audioCodec: String? = nil,
+        filesize: Int64? = nil,
+        approximateFilesize: Int64? = nil,
+        totalBitrate: Double? = nil,
+        formatNote: String? = nil
+    ) {
+        self.id = id
+        self.extensionName = extensionName
+        self.resolution = resolution
+        self.height = height
+        self.fps = fps
+        self.videoCodec = videoCodec
+        self.audioCodec = audioCodec
+        self.filesize = filesize
+        self.approximateFilesize = approximateFilesize
+        self.totalBitrate = totalBitrate
+        self.formatNote = formatNote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = container.decodeLossyString(forKey: .id) ?? ""
+        self.extensionName = container.decodeLossyString(forKey: .extensionName)
+        self.resolution = container.decodeLossyString(forKey: .resolution)
+        self.height = container.decodeLossyInt(forKey: .height)
+        self.fps = container.decodeLossyDouble(forKey: .fps)
+        self.videoCodec = container.decodeLossyString(forKey: .videoCodec)
+        self.audioCodec = container.decodeLossyString(forKey: .audioCodec)
+        self.filesize = container.decodeLossyInt64(forKey: .filesize)
+        self.approximateFilesize = container.decodeLossyInt64(forKey: .approximateFilesize)
+        self.totalBitrate = container.decodeLossyDouble(forKey: .totalBitrate)
+        self.formatNote = container.decodeLossyString(forKey: .formatNote)
+    }
+
+    public var hasVideo: Bool {
+        guard let videoCodec, !videoCodec.isEmpty else {
+            return false
+        }
+
+        return videoCodec != "none"
+    }
+
+    public var hasAudio: Bool {
+        guard let audioCodec, !audioCodec.isEmpty else {
+            return false
+        }
+
+        return audioCodec != "none"
+    }
+
+    public var downloadSelector: String {
+        hasVideo && !hasAudio ? "\(id)+bestaudio/best" : id
+    }
+
+    public var displayTitle: String {
+        let quality = resolutionLabel
+        let container = extensionName?.uppercased()
+        let bitrate = totalBitrate.map { "\(Int($0.rounded()))k" }
+
+        return [id, quality, container, formatNote, bitrate]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "none" }
+            .joined(separator: " · ")
+    }
+
+    public var technicalSummary: String {
+        let codecs = [videoCodecLabel, audioCodecLabel]
+            .compactMap { $0 }
+            .joined(separator: " / ")
+        let size = byteCount.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+        let fpsLabel = fps.map { "\(Int($0.rounded())) fps" }
+
+        return [codecs.isEmpty ? nil : codecs, fpsLabel, size]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    public var sortScore: Double {
+        let videoWeight = hasVideo ? 1_000_000.0 : 0.0
+        let audioWeight = hasAudio ? 50_000.0 : 0.0
+        let heightWeight = Double(height ?? 0) * 100.0
+        let fpsWeight = fps ?? 0
+        let bitrateWeight = totalBitrate ?? 0
+
+        return videoWeight + audioWeight + heightWeight + fpsWeight + bitrateWeight
+    }
+
+    private var resolutionLabel: String? {
+        if let resolution, !resolution.isEmpty, resolution != "audio only" {
+            return resolution
+        }
+
+        if let height, height > 0 {
+            return "\(height)p"
+        }
+
+        if hasAudio && !hasVideo {
+            return "audio only"
+        }
+
+        return nil
+    }
+
+    private var videoCodecLabel: String? {
+        guard hasVideo, let videoCodec else {
+            return nil
+        }
+
+        return "V: \(videoCodec)"
+    }
+
+    private var audioCodecLabel: String? {
+        guard hasAudio, let audioCodec else {
+            return nil
+        }
+
+        return "A: \(audioCodec)"
+    }
+
+    private var byteCount: Int64? {
+        filesize ?? approximateFilesize
+    }
+}
+
 public struct DownloadProgress: Equatable, Sendable {
     public let percent: Double
     public let speed: String
@@ -182,6 +340,80 @@ public struct DownloadProgress: Equatable, Sendable {
         self.percent = percent
         self.speed = speed
         self.eta = eta
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeLossyString(forKey key: Key) -> String? {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return value
+        }
+
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
+            return String(value)
+        }
+
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return String(value)
+        }
+
+        return nil
+    }
+
+    func decodeLossyInt(forKey key: Key) -> Int? {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return Int(value)
+        }
+
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Int(value)
+        }
+
+        return nil
+    }
+
+    func decodeLossyInt64(forKey key: Key) -> Int64? {
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
+            return value
+        }
+
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return Int64(value)
+        }
+
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return Int64(value)
+        }
+
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Int64(value)
+        }
+
+        return nil
+    }
+
+    func decodeLossyDouble(forKey key: Key) -> Double? {
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return Double(value)
+        }
+
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Double(value)
+        }
+
+        return nil
     }
 }
 

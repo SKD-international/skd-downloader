@@ -90,6 +90,47 @@ func videoFormatOverrideIsNormalizedBeforePassingToYTDLP() {
 }
 
 @Test
+func selectedFormatIDOverridesAutomaticVideoQualitySelection() {
+    let config = DownloadConfiguration()
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: config,
+        mode: .video,
+        formatOverride: "mp4",
+        qualityOverride: "720",
+        formatID: "137+bestaudio/best"
+    )
+
+    #expect(args.contains("-f"))
+    #expect(args.contains("137+bestaudio/best"))
+    #expect(!args.contains("bestvideo[height<=720]+bestaudio/best[height<=720]/best"))
+}
+
+@Test
+func shellPreviewQuotesArgumentsWithSpacesAndApostrophes() {
+    let preview = YTDLPCommandBuilder.shellPreview(
+        arguments: ["--output", "/tmp/SKD Downloads/%(title)s.%(ext)s", "https://example.com/watch?v=it'is"]
+    )
+
+    #expect(preview.contains("'\\''"))
+    #expect(preview.contains("'/tmp/SKD Downloads/%(title)s.%(ext)s'"))
+}
+
+@Test
+func formatParserExtractsAndSortsYTDLPFormats() throws {
+    let output = """
+    {"id":"abc","formats":[{"format_id":"18","ext":"mp4","height":360,"fps":30,"vcodec":"avc1","acodec":"mp4a","filesize":123456,"tbr":420,"format_note":"360p"},{"format_id":"137","ext":"mp4","height":"1080","fps":30,"vcodec":"avc1","acodec":"none","filesize_approx":987654,"tbr":2600,"format_note":"1080p"},{"format_id":140,"ext":"m4a","resolution":"audio only","vcodec":"none","acodec":"mp4a","tbr":"128"}]}
+    """
+
+    let formats = try YTDLPOutputParser.formatOptions(from: output)
+
+    #expect(formats.map(\.id) == ["137", "18", "140"])
+    #expect(formats.first?.downloadSelector == "137+bestaudio/best")
+    #expect(formats[1].downloadSelector == "18")
+    #expect(formats[2].displayTitle.contains("audio only"))
+}
+
+@Test
 func defaultCookieArgsUseNoCookiesWhenNoBrowserProfileExists() throws {
     let home = try temporaryHome()
     defer { try? FileManager.default.removeItem(at: home) }

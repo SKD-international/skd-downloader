@@ -64,6 +64,10 @@ struct DownloadQueueItem: Identifiable, Equatable {
     var eta: String
     var destination: String?
     var status: QueueStatus
+    var availableFormats: [YTDLPFormatOption]
+    var selectedFormatID: String?
+    var isLoadingFormats: Bool
+    var formatError: String?
 
     init(
         id: UUID = UUID(),
@@ -86,6 +90,10 @@ struct DownloadQueueItem: Identifiable, Equatable {
         self.eta = "—"
         self.destination = nil
         self.status = .queued
+        self.availableFormats = []
+        self.selectedFormatID = nil
+        self.isLoadingFormats = false
+        self.formatError = nil
     }
 }
 
@@ -331,6 +339,7 @@ public final class DownloaderAppState: ObservableObject {
             mode: item.mode,
             formatOverride: item.format,
             qualityOverride: item.quality,
+            formatID: formatSelector(for: item),
             cancellationToken: cancellationToken
         ) { [weak self] line in
             Task { @MainActor in
@@ -369,6 +378,88 @@ public final class DownloaderAppState: ObservableObject {
             queue[refreshedIndex].status = .failed(result.output)
             statusMessage = result.output.isEmpty ? "Download failed." : result.output
         }
+    }
+
+    func refreshFormats(for itemID: UUID) async {
+        guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        guard queue[index].mode == .video else {
+            queue[index].formatError = "Format inspection is only used for video jobs."
+            statusMessage = queue[index].formatError ?? "Unsupported job mode."
+            return
+        }
+
+        let url = queue[index].url
+        queue[index].isLoadingFormats = true
+        queue[index].formatError = nil
+        statusMessage = "Loading formats for \(queue[index].title)…"
+
+        do {
+            let formats = try await engine.fetchFormatOptions(url: url, configuration: configuration)
+            guard let refreshedIndex = queue.firstIndex(where: { $0.id == itemID }) else {
+                return
+            }
+
+            queue[refreshedIndex].availableFormats = formats
+            queue[refreshedIndex].isLoadingFormats = false
+            if let selectedFormatID = queue[refreshedIndex].selectedFormatID,
+               !formats.contains(where: { $0.id == selectedFormatID }) {
+                queue[refreshedIndex].selectedFormatID = nil
+            }
+
+            statusMessage = formats.isEmpty
+                ? "No selectable formats returned for this item."
+                : "Loaded \(formats.count) format option(s)."
+        } catch {
+            guard let refreshedIndex = queue.firstIndex(where: { $0.id == itemID }) else {
+                return
+            }
+
+            queue[refreshedIndex].availableFormats = []
+            queue[refreshedIndex].selectedFormatID = nil
+            queue[refreshedIndex].isLoadingFormats = false
+            queue[refreshedIndex].formatError = error.localizedDescription
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func selectFormat(_ formatID: String?, for itemID: UUID) {
+        guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        let normalized = formatID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        queue[index].selectedFormatID = normalized?.isEmpty == false ? normalized : nil
+        statusMessage = queue[index].selectedFormatID == nil
+            ? "Using automatic format selection."
+            : "Selected format \(queue[index].selectedFormatID ?? "")."
+    }
+
+    func selectedFormatID(for itemID: UUID) -> String? {
+        queue.first(where: { $0.id == itemID })?.selectedFormatID
+    }
+
+    func commandPreview(for item: DownloadQueueItem) -> String {
+        let arguments = YTDLPCommandBuilder.build(
+            url: item.url,
+            configuration: configuration,
+            mode: item.mode,
+            formatOverride: item.format,
+            qualityOverride: item.quality,
+            formatID: formatSelector(for: item)
+        )
+
+        return YTDLPCommandBuilder.shellPreview(arguments: arguments)
+    }
+
+    func copyCommandPreview(for itemID: UUID) {
+        guard let item = queue.first(where: { $0.id == itemID }) else {
+            return
+        }
+
+        copyToClipboard(commandPreview(for: item), label: "command")
     }
 
     func stopDownloads() {
@@ -541,6 +632,14 @@ public final class DownloaderAppState: ObservableObject {
         if line.contains("ERROR") {
             queue[index].status = .failed(line)
         }
+    }
+
+    private func formatSelector(for item: DownloadQueueItem) -> String? {
+        guard item.mode == .video, let selectedFormatID = item.selectedFormatID else {
+            return nil
+        }
+
+        return item.availableFormats.first(where: { $0.id == selectedFormatID })?.downloadSelector ?? selectedFormatID
     }
 
     private func revealFile(at path: String) {

@@ -91,6 +91,12 @@ public enum YTDLPCommandBuilder {
         return args
     }
 
+    public static func shellPreview(arguments: [String], executableName: String = "yt-dlp") -> String {
+        ([executableName] + arguments)
+            .map(shellEscaped)
+            .joined(separator: " ")
+    }
+
     public static func cookieArguments(
         url: String,
         configuration: DownloadConfiguration,
@@ -125,5 +131,18 @@ public enum YTDLPCommandBuilder {
         default:
             return "mp4"
         }
+    }
+
+    private static func shellEscaped(_ value: String) -> String {
+        guard !value.isEmpty else {
+            return "''"
+        }
+
+        let safeCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:=+,%@"))
+        if value.unicodeScalars.allSatisfy({ safeCharacters.contains($0) }) {
+            return value
+        }
+
+        return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

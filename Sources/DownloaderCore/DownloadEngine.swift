@@ -179,12 +179,48 @@ public final class YTDLPEngine: @unchecked Sendable {
         )
     }
 
+    public func fetchFormatOptions(url: String, configuration: DownloadConfiguration) async throws -> [YTDLPFormatOption] {
+        guard let binary = BinaryLocator.locate("yt-dlp") else {
+            throw NSError(domain: "YTDLPEngine", code: 404, userInfo: [NSLocalizedDescriptionKey: "yt-dlp not found"])
+        }
+
+        let arguments = Self.formatArguments(url: url, configuration: configuration)
+        let result = await run(arguments: arguments, executable: binary)
+        if result.exitCode == 0 {
+            return try YTDLPOutputParser.formatOptions(from: result.output)
+        }
+
+        if Self.shouldRetryWithoutCookies(output: result.output), Self.argumentsUseBrowserCookies(arguments) {
+            let retryConfiguration = configuration.withoutBrowserCookies()
+            let retryResult = await run(
+                arguments: Self.formatArguments(url: url, configuration: retryConfiguration),
+                executable: binary
+            )
+            if retryResult.exitCode == 0 {
+                return try YTDLPOutputParser.formatOptions(from: retryResult.output)
+            }
+
+            throw NSError(
+                domain: "YTDLPEngine",
+                code: Int(retryResult.exitCode),
+                userInfo: [NSLocalizedDescriptionKey: Self.errorSummary(from: retryResult.output)]
+            )
+        }
+
+        throw NSError(
+            domain: "YTDLPEngine",
+            code: Int(result.exitCode),
+            userInfo: [NSLocalizedDescriptionKey: Self.errorSummary(from: result.output)]
+        )
+    }
+
     public func startDownload(
         url: String,
         configuration: DownloadConfiguration,
         mode: DownloadMode,
         formatOverride: String?,
         qualityOverride: String?,
+        formatID: String? = nil,
         cancellationToken: DownloadCancellationToken? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async -> DownloadCommandResult {
@@ -197,7 +233,8 @@ public final class YTDLPEngine: @unchecked Sendable {
             configuration: configuration,
             mode: mode,
             formatOverride: formatOverride,
-            qualityOverride: qualityOverride
+            qualityOverride: qualityOverride,
+            formatID: formatID
         )
 
         let result = await run(arguments: arguments, executable: binary, cancellationToken: cancellationToken, onLine: onLine)
@@ -209,7 +246,8 @@ public final class YTDLPEngine: @unchecked Sendable {
                     configuration: configuration.withoutBrowserCookies(),
                     mode: mode,
                     formatOverride: formatOverride,
-                    qualityOverride: qualityOverride
+                    qualityOverride: qualityOverride,
+                    formatID: formatID
                 ),
                 executable: binary,
                 cancellationToken: cancellationToken,
@@ -269,6 +307,13 @@ public final class YTDLPEngine: @unchecked Sendable {
 
     private static func infoArguments(url: String, configuration: DownloadConfiguration) -> [String] {
         var arguments = ["--dump-json", "--no-warnings", "--flat-playlist"]
+        arguments.insert(contentsOf: YTDLPCommandBuilder.cookieArguments(url: url, configuration: configuration), at: 0)
+        arguments.append(url)
+        return arguments
+    }
+
+    private static func formatArguments(url: String, configuration: DownloadConfiguration) -> [String] {
+        var arguments = ["--dump-json", "--no-warnings", "--no-playlist"]
         arguments.insert(contentsOf: YTDLPCommandBuilder.cookieArguments(url: url, configuration: configuration), at: 0)
         arguments.append(url)
         return arguments
