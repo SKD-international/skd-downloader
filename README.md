@@ -20,13 +20,14 @@ A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in rep
 ### macOS (Homebrew)
 
 ```bash
+brew tap bonchaloo/tap
 brew install --cask skd-downloader
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/Bonchaloo/skd-downloader.git
+git clone https://github.com/SKD-international/skd-downloader.git
 cd skd-downloader
 npm install
 npm start
@@ -45,6 +46,23 @@ npm run dist:mac
 
 # Windows
 npm run dist:win
+```
+
+## Native macOS Release
+
+The Swift native app is packaged separately for the Homebrew cask:
+
+```bash
+npm run native:release
+```
+
+This runs the Node and Swift test suites, builds `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
+
+To upload the native artifact to GitHub:
+
+```bash
+export SKD_NOTARY_PROFILE=<notarytool-keychain-profile>
+npm run native:release:upload
 ```
 
 ## License

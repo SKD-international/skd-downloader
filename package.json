@@ -1,6 +1,6 @@
 {
   "name": "skd-downloader",
-  "version": "0.9.0-beta.1",
+  "version": "0.9.0-beta.2",
   "description": "A premium yt-dlp GUI for Mac and Windows — free Media Human alternative",
   "main": "main.js",
   "scripts": {
@@ -9,7 +9,13 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win",
+    "native:build": "./script/build_and_run.sh --build",
+    "native:package": "./script/build_and_run.sh --package",
+    "native:release": "./script/release_native.sh",
+    "native:release:upload": "./script/release_native.sh --notarize --upload",
+    "native:test": "swift test",
+    "native:verify": "./script/build_and_run.sh --verify"
   },
   "build": {
     "appId": "com.skd.downloader",
@@ -21,16 +27,24 @@
       {
         "from": "bin",
         "to": "bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "assets/icon.icns"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "assets/icon.ico"
     },
     "files": [
@@ -41,7 +55,13 @@
       "assets/**/*"
     ]
   },
-  "keywords": ["yt-dlp", "youtube", "downloader", "video", "audio"],
+  "keywords": [
+    "yt-dlp",
+    "youtube",
+    "downloader",
+    "video",
+    "audio"
+  ],
   "author": "SKD International",
   "license": "MIT",
   "devDependencies": {

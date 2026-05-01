@@ -3,7 +3,7 @@
 ## What This Is
 Electron downloader app built around `yt-dlp`, aimed at replacing MediaHuman with a simpler GUI for Mac and Windows.
 
-- **GitHub:** `Bonchaloo/skd-downloader`
+- **GitHub:** `SKD-international/skd-downloader`
 - **Primary platforms:** macOS + Windows
 
 ## Current State

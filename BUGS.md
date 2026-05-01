@@ -26,7 +26,7 @@
 ## Architecture Notes for Continuation
 
 ### Project: `~/yt-dlp-gui/`
-### GitHub: https://github.com/Bonchaloo/skd-downloader
+### GitHub: https://github.com/SKD-international/skd-downloader
 ### Tech: Electron + HTML/CSS/JS + yt-dlp subprocess
 
 ### Files:
