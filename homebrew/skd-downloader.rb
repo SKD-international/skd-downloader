@@ -1,12 +1,12 @@
 cask "skd-downloader" do
-  version "0.9.0-beta.6"
-  sha256 "0eab71e46613e089ee22ac9a4cf7def8cd2566f8adfa3e365eda9f3c656f052f"
+  version "0.9.0-beta.7"
+  sha256 "1b938e86d96a6984d370a22ff5e4d558bb59204e722709c3b897fd1311e87729"
 
   github_token = ENV.fetch("HOMEBREW_GITHUB_API_TOKEN") do
     raise "HOMEBREW_GITHUB_API_TOKEN is required to install this private beta cask"
   end
 
-  url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/409931418?version=#{version}",
+  url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/409951915?version=#{version}",
       header: [
         "Accept: application/octet-stream",
         "Authorization: Bearer #{github_token}",
