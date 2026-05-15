@@ -443,6 +443,76 @@ func downloaderThemeAcceptsKnownStoredValue() {
     #expect(DownloaderAppPreferences.theme(defaults) == .raycastPulse)
 }
 
+@Test
+func urlInputParserExtractsSupportedURLsFromPastedText() {
+    let input = """
+    Save these:
+    https://www.youtube.com/watch?v=abc123
+    and this one (https://vimeo.com/12345).
+    Ignore ftp://example.com/movie and file:///tmp/movie.mp4.
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://www.youtube.com/watch?v=abc123",
+        "https://vimeo.com/12345",
+    ])
+}
+
+@Test
+func urlInputParserTrimsSurroundingPunctuationWithoutBreakingQueries() {
+    let input = """
+    First: <https://example.com/watch?v=abc123&list=PL_1>.
+    Balanced query stays: https://example.com/search?q=(clip)
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://example.com/watch?v=abc123&list=PL_1",
+        "https://example.com/search?q=(clip)",
+    ])
+}
+
+@Test
+func urlInputParserNormalizesSchemeLessMediaLinks() {
+    let input = """
+    queue youtube.com/watch?v=abc123
+    and (www.twitch.tv/videos/98765).
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://youtube.com/watch?v=abc123",
+        "https://www.twitch.tv/videos/98765",
+    ])
+}
+
+@Test
+func urlInputParserPreservesOrderAndRemovesDuplicates() {
+    let input = """
+    https://youtu.be/first
+    https://youtu.be/first
+    https://youtu.be/second,
+    https://youtu.be/first
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://youtu.be/first",
+        "https://youtu.be/second",
+    ])
+}
+
+@Test
+func urlInputParserRejectsUnsupportedAndIncompleteURLs() {
+    let input = """
+    ftp://example.com/video
+    file:///tmp/video.mp4
+    http://
+    https://
+    www.youtube.com
+    youtube.com
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input).isEmpty)
+}
+
 private func temporaryHome() throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("SKDDownloaderTests-\(UUID().uuidString)", isDirectory: true)

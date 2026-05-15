@@ -278,12 +278,31 @@ public final class DownloaderAppState: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         else {
-            statusMessage = "Clipboard does not contain a URL."
+            statusMessage = "Clipboard does not contain a supported URL."
             return
         }
 
-        urlInput = value
-        statusMessage = "Pasted URL from clipboard."
+        let urls = URLInputParser.extractSupportedURLs(from: value)
+        guard !urls.isEmpty else {
+            statusMessage = "Clipboard does not contain a supported URL."
+            return
+        }
+
+        let existingURLs = Set(URLInputParser.extractSupportedURLs(from: urlInput))
+        let newURLs = urls.filter { !existingURLs.contains($0) }
+        guard !newURLs.isEmpty else {
+            statusMessage = "Clipboard URLs are already in the composer."
+            return
+        }
+
+        let currentInput = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if currentInput.isEmpty {
+            urlInput = newURLs.joined(separator: "\n")
+        } else {
+            urlInput = ([currentInput] + newURLs).joined(separator: "\n")
+        }
+
+        statusMessage = "Pasted \(newURLs.count) \(urlLabel(count: newURLs.count)) from clipboard."
     }
 
     func addURL() async {
@@ -292,19 +311,20 @@ public final class DownloaderAppState: ObservableObject {
             return
         }
 
+        let urls = URLInputParser.extractSupportedURLs(from: rawInput)
+        guard !urls.isEmpty else {
+            statusMessage = "Add at least one supported URL."
+            return
+        }
+
         isFetching = true
-        statusMessage = "Fetching metadata…"
+        statusMessage = urls.count == 1 ? "Fetching metadata…" : "Fetching metadata for \(urls.count) URLs…"
 
         defer {
             isFetching = false
         }
 
         do {
-            let urls = rawInput
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
             var items: [DownloadQueueItem] = []
             for url in urls {
                 let entries = try await engine.fetchInfo(url: url, configuration: configuration)
@@ -329,6 +349,10 @@ public final class DownloaderAppState: ObservableObject {
         } catch {
             statusMessage = error.localizedDescription
         }
+    }
+
+    private func urlLabel(count: Int) -> String {
+        count == 1 ? "URL" : "URLs"
     }
 
     func startQueue() async {

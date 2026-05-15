@@ -153,7 +153,7 @@ struct DownloaderOverviewView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
-                    Text("One URL per line. Queue first, inspect formats when needed.")
+                    Text("Paste links or notes. SKD extracts supported URLs before queueing.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
@@ -164,7 +164,7 @@ struct DownloaderOverviewView: View {
                     Button {
                         appState.pasteURLFromClipboard()
                     } label: {
-                        Label("Paste URL", systemImage: "doc.on.clipboard")
+                        Label("Paste Links", systemImage: "doc.on.clipboard")
                     }
                     .buttonStyle(.bordered)
 
