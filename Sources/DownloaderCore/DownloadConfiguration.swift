@@ -67,6 +67,9 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
     public var sponsorBlock: Bool
     public var embedSubtitles: Bool
     public var subtitleLangs: String
+    public var saveSubtitleFiles: Bool
+    public var writeAutoSubtitles: Bool
+    public var subtitleFormat: String
     public var embedThumbnail: Bool
     public var saveThumbnail: Bool
     public var writeTags: Bool
@@ -96,6 +99,9 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         case sponsorBlock
         case embedSubtitles
         case subtitleLangs
+        case saveSubtitleFiles
+        case writeAutoSubtitles
+        case subtitleFormat
         case embedThumbnail
         case saveThumbnail
         case writeTags
@@ -126,6 +132,9 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         sponsorBlock: Bool = true,
         embedSubtitles: Bool = false,
         subtitleLangs: String = "en",
+        saveSubtitleFiles: Bool = false,
+        writeAutoSubtitles: Bool = false,
+        subtitleFormat: String = "srt",
         embedThumbnail: Bool = true,
         saveThumbnail: Bool = false,
         writeTags: Bool = true,
@@ -154,6 +163,9 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         self.sponsorBlock = sponsorBlock
         self.embedSubtitles = embedSubtitles
         self.subtitleLangs = subtitleLangs
+        self.saveSubtitleFiles = saveSubtitleFiles
+        self.writeAutoSubtitles = writeAutoSubtitles
+        self.subtitleFormat = subtitleFormat
         self.embedThumbnail = embedThumbnail
         self.saveThumbnail = saveThumbnail
         self.writeTags = writeTags
@@ -187,6 +199,9 @@ public struct DownloadConfiguration: Codable, Equatable, Sendable {
         self.sponsorBlock = try container.decodeIfPresent(Bool.self, forKey: .sponsorBlock) ?? defaults.sponsorBlock
         self.embedSubtitles = try container.decodeIfPresent(Bool.self, forKey: .embedSubtitles) ?? defaults.embedSubtitles
         self.subtitleLangs = try container.decodeIfPresent(String.self, forKey: .subtitleLangs) ?? defaults.subtitleLangs
+        self.saveSubtitleFiles = try container.decodeIfPresent(Bool.self, forKey: .saveSubtitleFiles) ?? defaults.saveSubtitleFiles
+        self.writeAutoSubtitles = try container.decodeIfPresent(Bool.self, forKey: .writeAutoSubtitles) ?? defaults.writeAutoSubtitles
+        self.subtitleFormat = try container.decodeIfPresent(String.self, forKey: .subtitleFormat) ?? defaults.subtitleFormat
         self.embedThumbnail = try container.decodeIfPresent(Bool.self, forKey: .embedThumbnail) ?? defaults.embedThumbnail
         self.saveThumbnail = try container.decodeIfPresent(Bool.self, forKey: .saveThumbnail) ?? defaults.saveThumbnail
         self.writeTags = try container.decodeIfPresent(Bool.self, forKey: .writeTags) ?? defaults.writeTags
@@ -268,7 +283,7 @@ public struct VideoInfo: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-public struct YTDLPFormatOption: Decodable, Equatable, Identifiable, Sendable {
+public struct YTDLPFormatOption: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let extensionName: String?
     public let resolution: String?
@@ -334,6 +349,21 @@ public struct YTDLPFormatOption: Decodable, Equatable, Identifiable, Sendable {
         self.approximateFilesize = container.decodeLossyInt64(forKey: .approximateFilesize)
         self.totalBitrate = container.decodeLossyDouble(forKey: .totalBitrate)
         self.formatNote = container.decodeLossyString(forKey: .formatNote)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(extensionName, forKey: .extensionName)
+        try container.encodeIfPresent(resolution, forKey: .resolution)
+        try container.encodeIfPresent(height, forKey: .height)
+        try container.encodeIfPresent(fps, forKey: .fps)
+        try container.encodeIfPresent(videoCodec, forKey: .videoCodec)
+        try container.encodeIfPresent(audioCodec, forKey: .audioCodec)
+        try container.encodeIfPresent(filesize, forKey: .filesize)
+        try container.encodeIfPresent(approximateFilesize, forKey: .approximateFilesize)
+        try container.encodeIfPresent(totalBitrate, forKey: .totalBitrate)
+        try container.encodeIfPresent(formatNote, forKey: .formatNote)
     }
 
     public var hasVideo: Bool {

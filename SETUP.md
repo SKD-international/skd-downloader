@@ -40,11 +40,14 @@ The native macOS app is distributed through the SKD tap:
 
 ```bash
 brew tap bonchaloo/tap
-export HOMEBREW_GITHUB_API_TOKEN="$(gh auth token)" # required while the beta repo is private
 brew install --cask skd-downloader
 ```
 
 The cask installs the Homebrew `yt-dlp` and `ffmpeg` formula dependencies. The native app resolves those Homebrew-managed tools through absolute `/opt/homebrew` and `/usr/local` paths so GUI launches work even when macOS starts the app with a minimal `PATH`.
+
+If the project is shipping a deliberately private beta artifact, use the private
+cask mode from the release script and set `HOMEBREW_GITHUB_API_TOKEN` before
+installing. Public casks should not require a token just to audit or load.
 
 The native cask supports macOS 14 Sonoma and newer, including macOS 15 Sequoia.
 Release artifacts are universal `arm64` + `x86_64` app bundles for Apple
@@ -65,7 +68,7 @@ Silicon and Intel Macs.
 Run the staged macOS bundle:
 
 ```bash
-cd /Users/bonchaloo/Desktop/Projects/skd-downloader
+cd /path/to/skd-downloader
 ./script/build_and_run.sh --verify
 ```
 
@@ -76,3 +79,17 @@ npm run native:release
 ```
 
 If the app still shows `Binary Missing`, open Settings and use the setup section to confirm the detected binary path.
+
+## Release And Tap Checks
+
+```bash
+export SKD_NOTARY_PROFILE=skd-downloader-notary
+npm run native:notary:preflight
+npm run native:release:upload
+brew audit --cask --strict skd-downloader
+brew install --cask --dry-run skd-downloader
+```
+
+The public cask should point at the normal GitHub release download URL. Use
+`SKD_RELEASE_PRIVATE_ASSET=1` only for a closed beta asset that intentionally
+requires `HOMEBREW_GITHUB_API_TOKEN`.

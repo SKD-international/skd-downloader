@@ -395,25 +395,55 @@ struct DownloaderHistoryDetailView: View {
                 .foregroundStyle(theme.mutedText)
                 .textSelection(.enabled)
 
-            HStack(spacing: 10) {
-                Button("Reveal in Finder") {
-                    appState.revealDestination(for: entry)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    historyActions
                 }
-                .buttonStyle(.borderedProminent)
+                .labelStyle(.titleAndIcon)
 
-                Button("Open Source") {
-                    appState.openSourceURL(entry.url)
+                HStack(spacing: 8) {
+                    historyActions
                 }
-                .buttonStyle(.bordered)
-
-                Button("Copy Path") {
-                    appState.copyToClipboard(entry.filePath, label: "path")
-                }
-                .buttonStyle(.bordered)
+                .labelStyle(.iconOnly)
             }
         }
         .padding(22)
         .downloaderPanel(theme: theme, tone: .strong, radius: 24)
+    }
+
+    @ViewBuilder
+    private var historyActions: some View {
+        Button {
+            appState.requeue(entry)
+        } label: {
+            Label("Requeue", systemImage: "arrow.clockwise.circle")
+        }
+        .buttonStyle(.borderedProminent)
+        .help("Requeue with current Smart Mode settings")
+
+        Button {
+            appState.revealDestination(for: entry)
+        } label: {
+            Label("Reveal", systemImage: "folder")
+        }
+        .buttonStyle(.bordered)
+        .help("Reveal in Finder")
+
+        Button {
+            appState.openSourceURL(entry.url)
+        } label: {
+            Label("Open Source", systemImage: "safari")
+        }
+        .buttonStyle(.bordered)
+        .help("Open source URL")
+
+        Button {
+            appState.copyToClipboard(entry.filePath, label: "path")
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.doc")
+        }
+        .buttonStyle(.bordered)
+        .help("Copy downloaded file path")
     }
 
     private var recordCard: some View {

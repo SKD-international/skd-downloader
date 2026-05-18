@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a focused improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow should be better?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should SKD Downloader do?
+    validations:
+      required: true
+  - type: dropdown
+    id: lane
+    attributes:
+      label: App lane
+      options:
+        - Native macOS Homebrew app
+        - Legacy Electron app
+        - Both
+        - Not sure
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

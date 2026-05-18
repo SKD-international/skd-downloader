@@ -69,17 +69,37 @@ public final class DownloadCancellationToken: @unchecked Sendable {
 
 public final class DownloadSettingsStore: @unchecked Sendable {
     private let fileManager: FileManager
+    private let rootURL: URL
     private let configURL: URL
+    private let workbenchURL: URL
     private let historyURL: URL
 
     public init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
+        self.rootURL = Self.defaultRootURL(fileManager: fileManager)
+        try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        self.configURL = rootURL.appendingPathComponent("config.json")
+        self.workbenchURL = rootURL.appendingPathComponent("workbench.json")
+        self.historyURL = rootURL.appendingPathComponent("history.json")
+    }
+
+    public init(rootURL: URL, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        self.rootURL = rootURL
+        try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        self.configURL = rootURL.appendingPathComponent("config.json")
+        self.workbenchURL = rootURL.appendingPathComponent("workbench.json")
+        self.historyURL = rootURL.appendingPathComponent("history.json")
+    }
+
+    public static func defaultRootURL(fileManager: FileManager = .default) -> URL {
         let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support", isDirectory: true)
-        let root = supportDirectory.appendingPathComponent("skd-downloader-native", isDirectory: true)
-        try? fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-        self.configURL = root.appendingPathComponent("config.json")
-        self.historyURL = root.appendingPathComponent("history.json")
+        return supportDirectory.appendingPathComponent("skd-downloader-native", isDirectory: true)
+    }
+
+    public func makeMediaLibraryStore() -> MediaLibraryStore {
+        MediaLibraryStore(rootURL: rootURL.appendingPathComponent("library", isDirectory: true), fileManager: fileManager)
     }
 
     public func loadConfiguration() -> DownloadConfiguration {
@@ -98,6 +118,27 @@ public final class DownloadSettingsStore: @unchecked Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(configuration) {
             try? data.write(to: configURL, options: .atomic)
+        }
+    }
+
+    public func loadWorkbenchState() -> DownloadWorkbenchState {
+        guard
+            let data = try? Data(contentsOf: workbenchURL),
+            let state = try? JSONDecoder().decode(DownloadWorkbenchState.self, from: data)
+        else {
+            return DownloadWorkbenchState(configuration: loadConfiguration())
+        }
+
+        return state
+    }
+
+    public func saveWorkbenchState(_ state: DownloadWorkbenchState) {
+        saveConfiguration(state.configuration)
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let data = try? encoder.encode(state) {
+            try? data.write(to: workbenchURL, options: .atomic)
         }
     }
 
@@ -128,7 +169,23 @@ public final class DownloadSettingsStore: @unchecked Sendable {
     }
 }
 
-public final class YTDLPEngine: @unchecked Sendable {
+public protocol YTDLPEngineClient: Sendable {
+    func checkToolchain() async -> EngineHealthReport
+    func fetchInfo(url: String, configuration: DownloadConfiguration) async throws -> [VideoInfo]
+    func fetchFormatOptions(url: String, configuration: DownloadConfiguration) async throws -> [YTDLPFormatOption]
+    func startDownload(
+        url: String,
+        configuration: DownloadConfiguration,
+        mode: DownloadMode,
+        formatOverride: String?,
+        qualityOverride: String?,
+        formatID: String?,
+        cancellationToken: DownloadCancellationToken?,
+        onLine: @escaping @Sendable (String) -> Void
+    ) async -> DownloadCommandResult
+}
+
+public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
     public init() {}
 
     public func checkInstallation() async -> BinaryStatus {

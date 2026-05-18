@@ -63,7 +63,12 @@ struct DownloaderRootView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            statusBar
+            VStack(spacing: 0) {
+                if let asset = appState.nowPlayingAsset {
+                    NowPlayingBar(appState: appState, asset: asset)
+                }
+                statusBar
+            }
         }
         .task {
             await appState.bootstrap()
@@ -90,6 +95,14 @@ struct DownloaderRootView: View {
                 DownloaderHistoryDetailView(appState: appState, entry: entry)
             } else {
                 DownloaderOverviewView(appState: appState)
+            }
+        case .libraryBrowser:
+            MediaLibraryView(appState: appState)
+        case .library:
+            if let asset = appState.selectedMediaAsset {
+                MediaPlayerView(appState: appState, asset: asset)
+            } else {
+                MediaLibraryView(appState: appState)
             }
         }
     }
