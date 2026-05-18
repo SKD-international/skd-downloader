@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/SKD-international/skd-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/SKD-international/skd-downloader/actions/workflows/ci.yml)
 
-A yt-dlp powered downloader with a native macOS app as the current Homebrew release lane and a legacy Electron app kept for the older cross-platform Mac/Windows lane.
+A native macOS downloader powered by yt-dlp. The Homebrew release is the main app for Mac users.
+
+For a simple native Mac walkthrough, see the [large-print Mac guide](docs/native-macos-large-print-guide.md).
 
 ## Features
 
@@ -16,7 +18,7 @@ A yt-dlp powered downloader with a native macOS app as the current Homebrew rele
 - **Download history** — Searchable log of past downloads
 - **Native media library** — Browse, filter, and play downloaded media on macOS
 - **Dark theme** — Premium dark cinematic UI
-- **Legacy cross-platform lane** — Electron source remains available for Mac/Windows builds
+- **Legacy cross-platform source** — Older Mac/Windows source remains available for developers
 
 ## Install
 
@@ -49,7 +51,7 @@ swift test
 npm run native:verify
 ```
 
-Legacy Electron app:
+Older cross-platform app source:
 
 ```bash
 git clone https://github.com/SKD-international/skd-downloader.git
@@ -72,7 +74,7 @@ npm run native:build
 npm run native:package
 ```
 
-Legacy Electron:
+Older cross-platform build:
 
 ```bash
 # Mac
