@@ -1,6 +1,8 @@
 # SKD Downloader
 
-A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in replacement for MediaHuman YouTube Downloader.
+[![CI](https://github.com/SKD-international/skd-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/SKD-international/skd-downloader/actions/workflows/ci.yml)
+
+A yt-dlp powered downloader with a native macOS app as the current Homebrew release lane and a legacy Electron app kept for the older cross-platform Mac/Windows lane.
 
 ## Features
 
@@ -12,8 +14,9 @@ A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in rep
 - **SponsorBlock** — Auto-remove sponsor segments
 - **Subtitles** — Download and embed subtitles
 - **Download history** — Searchable log of past downloads
+- **Native media library** — Browse, filter, and play downloaded media on macOS
 - **Dark theme** — Premium dark cinematic UI
-- **Cross-platform** — Mac and Windows
+- **Legacy cross-platform lane** — Electron source remains available for Mac/Windows builds
 
 ## Install
 
@@ -21,7 +24,6 @@ A free, open-source, premium-looking yt-dlp GUI for Mac and Windows. Drop-in rep
 
 ```bash
 brew tap bonchaloo/tap
-export HOMEBREW_GITHUB_API_TOKEN="$(gh auth token)" # required while the beta repo is private
 brew install --cask skd-downloader
 ```
 
@@ -29,7 +31,25 @@ The native Homebrew beta targets macOS 14 Sonoma and newer, including macOS 15
 Sequoia. Release packages are built as universal `arm64` + `x86_64` app bundles
 so the same cask can run on Apple Silicon and Intel Macs.
 
+Private beta casks are an explicit release mode. If a release asset must stay
+private, generate the cask with `SKD_RELEASE_PRIVATE_ASSET=1` and install with
+`HOMEBREW_GITHUB_API_TOKEN` set. The normal cask uses the public GitHub release
+download URL so `brew audit --cask --strict skd-downloader` can load it without
+private credentials.
+
 ### From source
+
+Native macOS app:
+
+```bash
+git clone https://github.com/SKD-international/skd-downloader.git
+cd skd-downloader
+brew install yt-dlp ffmpeg
+swift test
+npm run native:verify
+```
+
+Legacy Electron app:
 
 ```bash
 git clone https://github.com/SKD-international/skd-downloader.git
@@ -40,10 +60,19 @@ npm start
 
 ### Prerequisites
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) must be installed: `brew install yt-dlp`
-- [ffmpeg](https://ffmpeg.org/) recommended for format conversion: `brew install ffmpeg`
+- Homebrew cask installs [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org/) automatically.
+- Source builds should install them first: `brew install yt-dlp ffmpeg`
 
 ## Build
+
+Native macOS:
+
+```bash
+npm run native:build
+npm run native:package
+```
+
+Legacy Electron:
 
 ```bash
 # Mac
@@ -69,6 +98,7 @@ To upload the native artifact to GitHub:
 export SKD_NOTARY_PROFILE=skd-downloader-notary
 npm run native:notary:preflight
 npm run native:release:upload
+brew audit --cask --strict skd-downloader
 ```
 
 If the notarytool profile does not exist yet, create it from an interactive
@@ -80,6 +110,26 @@ export SKD_NOTARY_APPLE_ID=<apple-id>
 export SKD_NOTARY_TEAM_ID=<developer-team-id>
 npm run native:notary:setup
 ```
+
+Private beta release assets can still be published when the repository or asset
+must remain private:
+
+```bash
+export SKD_NOTARY_PROFILE=skd-downloader-notary
+SKD_RELEASE_PRIVATE_ASSET=1 npm run native:release:upload
+```
+
+See `docs/homebrew-release.md` for the full upload, tap, audit, and rollback
+workflow.
+
+## Open Source
+
+SKD Downloader is released under the MIT License. See:
+
+- `LICENSE` for license terms
+- `CONTRIBUTING.md` for local setup and pull request expectations
+- `SECURITY.md` for vulnerability reporting
+- `THIRD_PARTY_NOTICES.md` for runtime tool notes
 
 ## License
 

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: macOS test suite
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Homebrew runtime tools
+        run: brew install yt-dlp ffmpeg
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Run Swift tests
+        run: swift test
+
+      - name: Check release scripts
+        run: bash -n script/build_and_run.sh script/release_native.sh

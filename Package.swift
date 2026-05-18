@@ -16,5 +16,10 @@ let package = Package(
             dependencies: ["DownloaderCore"],
             path: "tests/DownloaderCoreTests"
         ),
+        .testTarget(
+            name: "DownloaderUITests",
+            dependencies: ["DownloaderUI", "DownloaderCore"],
+            path: "tests/DownloaderUITests"
+        ),
     ]
 )

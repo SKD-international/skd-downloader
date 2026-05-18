@@ -3,7 +3,7 @@ import Combine
 import DownloaderCore
 import Foundation
 
-enum QueueStatus: Equatable {
+enum QueueStatus: Codable, Equatable {
     case queued
     case downloading
     case cancelled
@@ -51,7 +51,7 @@ enum QueueStatus: Equatable {
     }
 }
 
-struct DownloadQueueItem: Identifiable, Equatable {
+struct DownloadQueueItem: Codable, Identifiable, Equatable {
     let id: UUID
     let url: String
     var title: String
@@ -63,6 +63,7 @@ struct DownloadQueueItem: Identifiable, Equatable {
     var speed: String
     var eta: String
     var destination: String?
+    var configuration: DownloadConfiguration?
     var status: QueueStatus
     var availableFormats: [YTDLPFormatOption]
     var selectedFormatID: String?
@@ -77,7 +78,8 @@ struct DownloadQueueItem: Identifiable, Equatable {
         thumbnail: String?,
         mode: DownloadMode,
         format: String,
-        quality: String
+        quality: String,
+        configuration: DownloadConfiguration? = nil
     ) {
         self.id = id
         self.url = url
@@ -90,6 +92,7 @@ struct DownloadQueueItem: Identifiable, Equatable {
         self.speed = "—"
         self.eta = "—"
         self.destination = nil
+        self.configuration = configuration
         self.status = .queued
         self.availableFormats = []
         self.selectedFormatID = nil
@@ -99,7 +102,7 @@ struct DownloadQueueItem: Identifiable, Equatable {
     }
 }
 
-struct DownloadActivityLogEntry: Identifiable, Equatable {
+struct DownloadActivityLogEntry: Codable, Identifiable, Equatable {
     let id: UUID
     let timestamp: Date
     let message: String
@@ -127,16 +130,43 @@ enum DownloaderSidebarSelection: Hashable {
     case overview
     case queue(UUID)
     case history(UUID)
+    case libraryBrowser
+    case library(UUID)
 }
 
 @MainActor
 public final class DownloaderAppState: ObservableObject {
-    @Published var configuration: DownloadConfiguration
+    @Published var configuration: DownloadConfiguration {
+        didSet {
+            guard !isApplyingDownloadPreset else {
+                return
+            }
+
+            selectedDownloadPreset = .custom
+            persistWorkbenchState()
+        }
+    }
     @Published var history: [DownloadHistoryEntry]
+    @Published private(set) var mediaLibraryAssets: [MediaAsset]
     @Published var queue: [DownloadQueueItem] = []
     @Published var selection: DownloaderSidebarSelection? = .overview
     @Published var urlInput = ""
-    @Published var selectedMode: DownloadMode = .video
+    @Published var mediaLibrarySearchText = ""
+    @Published var mediaLibraryFilter: MediaLibraryFilter = .all
+    @Published var mediaLibrarySort: MediaLibrarySort = .downloadedNewest
+    @Published var selectedMode: DownloadMode = .video {
+        didSet {
+            guard !isApplyingDownloadPreset else {
+                return
+            }
+
+            selectedDownloadPreset = .custom
+            persistWorkbenchState()
+        }
+    }
+    @Published var selectedDownloadPreset: DownloadPreset = .custom
+    @Published private(set) var queuePersistenceError: String?
+    @Published private(set) var mediaLibraryLoadError: String?
     @Published private(set) var isBinaryInstalled = false
     @Published private(set) var binaryVersion = "Checking…"
     @Published private(set) var binaryPath = ""
@@ -152,33 +182,122 @@ public final class DownloaderAppState: ObservableObject {
 
     private let defaults: UserDefaults
     private let settingsStore: DownloadSettingsStore
-    private let engine: YTDLPEngine
+    private let mediaLibraryStore: MediaLibraryStore
+    private let queueStore: DownloadQueueStore
+    private let engine: YTDLPEngineClient
     private var cancellables: Set<AnyCancellable> = []
     private var activeDownloadTokens: [UUID: DownloadCancellationToken] = [:]
     private var shouldStopQueue = false
     private var didBootstrap = false
+    private var isApplyingDownloadPreset = false
     private static let maxActivityLogLines = 300
 
     public init(
         defaults: UserDefaults = .standard,
         settingsStore: DownloadSettingsStore = DownloadSettingsStore(),
-        engine: YTDLPEngine = YTDLPEngine()
+        engine: YTDLPEngineClient = YTDLPEngine(),
+        mediaLibraryStore: MediaLibraryStore? = nil,
+        queueStore: DownloadQueueStore = DownloadQueueStore()
     ) {
         self.defaults = defaults
         self.settingsStore = settingsStore
+        self.mediaLibraryStore = mediaLibraryStore ?? settingsStore.makeMediaLibraryStore()
+        self.queueStore = queueStore
         self.engine = engine
-        self.configuration = settingsStore.loadConfiguration()
+        let workbenchState = settingsStore.loadWorkbenchState()
+        self.configuration = workbenchState.configuration
+        self.selectedMode = workbenchState.selectedMode
+        self.selectedDownloadPreset = workbenchState.selectedDownloadPreset
         self.history = settingsStore.loadHistory()
+        do {
+            self.mediaLibraryAssets = try self.mediaLibraryStore.markMissingFiles()
+            self.mediaLibraryLoadError = nil
+        } catch {
+            self.mediaLibraryAssets = []
+            self.mediaLibraryLoadError = "Library load failed: \(error.localizedDescription)"
+        }
+        var queueRecoveryError: String?
+        do {
+            var recoveredQueue = try queueStore.loadRecoveredQueue()
+            let didMigrateQueue = Self.backfillLegacyQueueConfigurations(
+                in: &recoveredQueue,
+                baseConfiguration: workbenchState.configuration
+            )
+            self.queue = recoveredQueue
+            if didMigrateQueue {
+                do {
+                    try queueStore.save(recoveredQueue)
+                } catch {
+                    queueRecoveryError = "Queue migration failed: \(error.localizedDescription)"
+                }
+            } else {
+                queueRecoveryError = nil
+            }
+        } catch {
+            self.queue = []
+            queueRecoveryError = "Queue recovery failed: \(error.localizedDescription)"
+        }
         self.showCompletedInSidebar = DownloaderAppPreferences.showCompletedInSidebar(defaults)
         self.showHistoryInSidebar = DownloaderAppPreferences.showHistoryInSidebar(defaults)
         self.recentHistoryLimit = DownloaderAppPreferences.recentHistoryLimit(defaults)
         self.themePreset = DownloaderAppPreferences.theme(defaults)
+        if let mediaLibraryLoadError {
+            self.statusMessage = mediaLibraryLoadError
+        }
+        if let queueRecoveryError {
+            self.queuePersistenceError = queueRecoveryError
+            self.statusMessage = queueRecoveryError
+        }
 
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification, object: defaults)
             .sink { [weak self] _ in
                 self?.reloadPreferences()
             }
             .store(in: &cancellables)
+    }
+
+    @discardableResult
+    private func persistQueueSnapshot() -> Bool {
+        do {
+            try queueStore.save(queue)
+            queuePersistenceError = nil
+            return true
+        } catch {
+            queuePersistenceError = "Queue persistence failed: \(error.localizedDescription)"
+            statusMessage = queuePersistenceError ?? statusMessage
+            return false
+        }
+    }
+
+    private func persistWorkbenchState() {
+        settingsStore.saveWorkbenchState(
+            DownloadWorkbenchState(
+                configuration: configuration,
+                selectedMode: selectedMode,
+                selectedDownloadPreset: selectedDownloadPreset
+            )
+        )
+    }
+
+    private static func backfillLegacyQueueConfigurations(
+        in queue: inout [DownloadQueueItem],
+        baseConfiguration: DownloadConfiguration
+    ) -> Bool {
+        var didMigrate = false
+        for index in queue.indices where queue[index].configuration == nil {
+            var snapshot = baseConfiguration
+            switch queue[index].mode {
+            case .video:
+                snapshot.videoFormat = queue[index].format
+                snapshot.videoQuality = queue[index].quality
+            case .audio:
+                snapshot.audioFormat = queue[index].format
+                snapshot.audioBitrate = queue[index].quality
+            }
+            queue[index].configuration = snapshot
+            didMigrate = true
+        }
+        return didMigrate
     }
 
     var sidebarQueueItems: [DownloadQueueItem] {
@@ -195,6 +314,32 @@ public final class DownloaderAppState: ObservableObject {
 
     var overviewHistoryEntries: [DownloadHistoryEntry] {
         Array(history.prefix(recentHistoryLimit))
+    }
+
+    var filteredMediaLibraryAssets: [MediaAsset] {
+        MediaLibraryQuery.apply(
+            mediaLibraryAssets,
+            searchText: mediaLibrarySearchText,
+            filter: mediaLibraryFilter,
+            sort: mediaLibrarySort
+        )
+    }
+
+    func refreshMediaLibrary() {
+        do {
+            mediaLibraryAssets = try mediaLibraryStore.markMissingFiles()
+            mediaLibraryLoadError = nil
+            statusMessage = "Library refreshed."
+        } catch {
+            mediaLibraryAssets = []
+            mediaLibraryLoadError = "Library load failed: \(error.localizedDescription)"
+            statusMessage = mediaLibraryLoadError ?? statusMessage
+        }
+    }
+
+    func clearMediaLibraryFilters() {
+        mediaLibrarySearchText = ""
+        mediaLibraryFilter = .all
     }
 
     var queueSummary: QueueSummary {
@@ -229,6 +374,18 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         return history.first(where: { $0.id == id })
+    }
+
+    var selectedMediaAsset: MediaAsset? {
+        guard case let .library(id)? = selection else {
+            return nil
+        }
+
+        return mediaLibraryAssets.first(where: { $0.id == id })
+    }
+
+    var nowPlayingAsset: MediaAsset? {
+        selectedMediaAsset
     }
 
     func bootstrap() async {
@@ -278,12 +435,47 @@ public final class DownloaderAppState: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         else {
-            statusMessage = "Clipboard does not contain a URL."
+            statusMessage = "Clipboard does not contain a supported URL."
             return
         }
 
-        urlInput = value
-        statusMessage = "Pasted URL from clipboard."
+        appendURLTextToComposer(
+            value,
+            verb: "Pasted",
+            emptyMessage: "Clipboard does not contain a supported URL.",
+            duplicateMessage: "Clipboard URLs are already in the composer."
+        )
+    }
+
+    @discardableResult
+    func appendURLTextToComposer(
+        _ value: String,
+        verb: String,
+        emptyMessage: String,
+        duplicateMessage: String
+    ) -> Int {
+        let urls = URLInputParser.extractSupportedURLs(from: value)
+        guard !urls.isEmpty else {
+            statusMessage = emptyMessage
+            return 0
+        }
+
+        let existingURLs = Set(URLInputParser.extractSupportedURLs(from: urlInput))
+        let newURLs = urls.filter { !existingURLs.contains($0) }
+        guard !newURLs.isEmpty else {
+            statusMessage = duplicateMessage
+            return 0
+        }
+
+        let currentInput = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if currentInput.isEmpty {
+            urlInput = newURLs.joined(separator: "\n")
+        } else {
+            urlInput = ([currentInput] + newURLs).joined(separator: "\n")
+        }
+
+        statusMessage = "\(verb) \(newURLs.count) \(urlLabel(count: newURLs.count)) from input."
+        return newURLs.count
     }
 
     func addURL() async {
@@ -292,35 +484,39 @@ public final class DownloaderAppState: ObservableObject {
             return
         }
 
+        let urls = URLInputParser.extractSupportedURLs(from: rawInput)
+        guard !urls.isEmpty else {
+            statusMessage = "Add at least one supported URL."
+            return
+        }
+
         isFetching = true
-        statusMessage = "Fetching metadata…"
+        statusMessage = urls.count == 1 ? "Fetching metadata…" : "Fetching metadata for \(urls.count) URLs…"
 
         defer {
             isFetching = false
         }
 
         do {
-            let urls = rawInput
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
             var items: [DownloadQueueItem] = []
+            let queueConfiguration = configuration
+            let queueMode = selectedMode
             for url in urls {
-                let entries = try await engine.fetchInfo(url: url, configuration: configuration)
+                let entries = try await engine.fetchInfo(url: url, configuration: queueConfiguration)
                 items.append(contentsOf: entries.map { entry in
                     DownloadQueueItem(
                         url: entry.webpageURL ?? url,
                         title: entry.title,
                         thumbnail: entry.thumbnail,
-                        mode: selectedMode,
-                        format: selectedMode == .video ? configuration.videoFormat : configuration.audioFormat,
-                        quality: selectedMode == .video ? configuration.videoQuality : configuration.audioBitrate
+                        mode: queueMode,
+                        format: queueMode == .video ? queueConfiguration.videoFormat : queueConfiguration.audioFormat,
+                        quality: queueMode == .video ? queueConfiguration.videoQuality : queueConfiguration.audioBitrate,
+                        configuration: queueConfiguration
                     )
                 })
             }
 
-            queue.append(contentsOf: items)
+            appendQueueItems(items)
             if let first = items.first {
                 selection = .queue(first.id)
             }
@@ -328,6 +524,75 @@ public final class DownloaderAppState: ObservableObject {
             urlInput = ""
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    private func urlLabel(count: Int) -> String {
+        count == 1 ? "URL" : "URLs"
+    }
+
+    func applyDownloadPreset(_ preset: DownloadPreset) {
+        guard preset != .custom else {
+            selectedDownloadPreset = .custom
+            persistWorkbenchState()
+            statusMessage = "Using custom download settings."
+            return
+        }
+
+        let applied: AppliedDownloadPreset
+        do {
+            applied = try preset.applying(to: configuration)
+        } catch {
+            selectedDownloadPreset = .custom
+            statusMessage = error.localizedDescription
+            return
+        }
+        isApplyingDownloadPreset = true
+        defer {
+            isApplyingDownloadPreset = false
+        }
+        selectedDownloadPreset = preset
+        selectedMode = applied.mode
+        configuration = applied.configuration
+        persistWorkbenchState()
+        statusMessage = "Applied \(preset.displayName)."
+    }
+
+    @discardableResult
+    func appendQueueItems(_ items: [DownloadQueueItem]) -> Bool {
+        guard !items.isEmpty else {
+            return true
+        }
+
+        queue.append(contentsOf: items)
+        return persistQueueSnapshot()
+    }
+
+    func requeue(_ entry: DownloadHistoryEntry) {
+        requeueDownload(title: entry.title, url: entry.url)
+    }
+
+    func requeue(_ asset: MediaAsset) {
+        requeueDownload(title: asset.title, url: asset.source.absoluteString)
+    }
+
+    private func requeueDownload(title: String, url: String) {
+        let queueConfiguration = configuration
+        let queueMode = selectedMode
+        let item = DownloadQueueItem(
+            url: url,
+            title: title,
+            thumbnail: nil,
+            mode: queueMode,
+            format: queueMode == .video ? queueConfiguration.videoFormat : queueConfiguration.audioFormat,
+            quality: queueMode == .video ? queueConfiguration.videoQuality : queueConfiguration.audioBitrate,
+            configuration: queueConfiguration
+        )
+
+        let didPersist = appendQueueItems([item])
+        selection = .queue(item.id)
+        if didPersist {
+            statusMessage = "Requeued \(title)."
         }
     }
 
@@ -342,22 +607,91 @@ public final class DownloaderAppState: ObservableObject {
             return
         }
 
-        isDownloading = true
-        shouldStopQueue = false
-        defer { isDownloading = false }
-
         for itemID in pendingIDs {
-            if shouldStopQueue {
-                statusMessage = "Queue stopped."
-                break
+            guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+                continue
             }
 
-            await download(itemID: itemID)
+            if queue[index].status != .queued {
+                queue[index].status = .queued
+                queue[index].progress = 0
+                queue[index].speed = "—"
+                queue[index].eta = "—"
+            }
+        }
+
+        isDownloading = true
+        shouldStopQueue = false
+        persistQueueSnapshot()
+        defer {
+            isDownloading = false
+            persistQueueSnapshot()
+        }
+
+        let limit = max(1, configuration.concurrentDownloads)
+
+        await withTaskGroup(of: Void.self) { group in
+            var scheduledIDs = Set<UUID>()
+            var runningCount = 0
+
+            while runningCount < limit {
+                let queuedIDs = await MainActor.run {
+                    self.queue.compactMap { item in
+                        item.status == .queued ? item.id : nil
+                    }
+                }
+                guard let queuedItemID = queuedIDs.first(where: { !scheduledIDs.contains($0) }) else {
+                    break
+                }
+
+                scheduledIDs.insert(queuedItemID)
+                group.addTask { [weak self] in
+                    await self?.download(itemID: queuedItemID)
+                }
+                runningCount += 1
+            }
+
+            while runningCount > 0 {
+                _ = await group.next()
+                runningCount -= 1
+
+                let shouldStop = await MainActor.run {
+                    self.shouldStopQueue
+                }
+                guard !shouldStop else {
+                    continue
+                }
+
+                while runningCount < limit {
+                    let queuedIDs = await MainActor.run {
+                        self.queue.compactMap { item in
+                            item.status == .queued ? item.id : nil
+                        }
+                    }
+                    guard let queuedItemID = queuedIDs.first(where: { !scheduledIDs.contains($0) }) else {
+                        break
+                    }
+
+                    scheduledIDs.insert(queuedItemID)
+                    group.addTask { [weak self] in
+                        await self?.download(itemID: queuedItemID)
+                    }
+                    runningCount += 1
+                }
+            }
+        }
+
+        if shouldStopQueue {
+            statusMessage = "Queue stopped."
         }
     }
 
     func download(itemID: UUID) async {
         guard let index = queue.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        guard queue[index].status == .queued else {
             return
         }
 
@@ -368,8 +702,10 @@ public final class DownloaderAppState: ObservableObject {
         queue[index].eta = "—"
         queue[index].activityLog.removeAll()
         statusMessage = "Downloading \(queue[index].title)…"
+        persistQueueSnapshot()
 
         let item = queue[index]
+        let itemConfiguration = configuration(for: item)
         appendActivityLog("Starting \(item.mode.rawValue) download.", for: itemID)
         appendActivityLog("Command: \(commandPreview(for: item))", for: itemID)
 
@@ -381,7 +717,7 @@ public final class DownloaderAppState: ObservableObject {
 
         let result = await engine.startDownload(
             url: item.url,
-            configuration: configuration,
+            configuration: itemConfiguration,
             mode: item.mode,
             formatOverride: item.format,
             qualityOverride: item.quality,
@@ -421,12 +757,14 @@ public final class DownloaderAppState: ObservableObject {
                 )
                 settingsStore.appendHistory(entry)
                 history = settingsStore.loadHistory()
+                upsertMediaAsset(from: queue[refreshedIndex], destination: destination)
             }
         } else {
             queue[refreshedIndex].status = .failed(result.output)
             appendActivityLog("Process failed with exit code \(result.exitCode).", for: itemID)
             statusMessage = result.output.isEmpty ? "Download failed." : result.output
         }
+        persistQueueSnapshot()
     }
 
     func refreshFormats(for itemID: UUID) async {
@@ -446,7 +784,8 @@ public final class DownloaderAppState: ObservableObject {
         statusMessage = "Loading formats for \(queue[index].title)…"
 
         do {
-            let formats = try await engine.fetchFormatOptions(url: url, configuration: configuration)
+            let itemConfiguration = configuration(for: queue[index])
+            let formats = try await engine.fetchFormatOptions(url: url, configuration: itemConfiguration)
             guard let refreshedIndex = queue.firstIndex(where: { $0.id == itemID }) else {
                 return
             }
@@ -481,6 +820,7 @@ public final class DownloaderAppState: ObservableObject {
 
         let normalized = formatID?.trimmingCharacters(in: .whitespacesAndNewlines)
         queue[index].selectedFormatID = normalized?.isEmpty == false ? normalized : nil
+        persistQueueSnapshot()
         statusMessage = queue[index].selectedFormatID == nil
             ? "Using automatic format selection."
             : "Selected format \(queue[index].selectedFormatID ?? "")."
@@ -493,7 +833,7 @@ public final class DownloaderAppState: ObservableObject {
     func commandPreview(for item: DownloadQueueItem) -> String {
         let arguments = YTDLPCommandBuilder.build(
             url: item.url,
-            configuration: configuration,
+            configuration: configuration(for: item),
             mode: item.mode,
             formatOverride: item.format,
             qualityOverride: item.quality,
@@ -501,6 +841,10 @@ public final class DownloaderAppState: ObservableObject {
         )
 
         return YTDLPCommandBuilder.shellPreview(arguments: arguments)
+    }
+
+    private func configuration(for item: DownloadQueueItem) -> DownloadConfiguration {
+        item.configuration ?? configuration
     }
 
     func copyCommandPreview(for itemID: UUID) {
@@ -537,6 +881,7 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         queue[index].activityLog.removeAll()
+        persistQueueSnapshot()
         statusMessage = "Cleared activity log."
     }
 
@@ -553,7 +898,6 @@ public final class DownloaderAppState: ObservableObject {
 
     func stopDownload(_ itemID: UUID) {
         if let token = activeDownloadTokens[itemID] {
-            shouldStopQueue = true
             token.cancel()
             statusMessage = "Stopping selected download…"
             return
@@ -565,6 +909,7 @@ public final class DownloaderAppState: ObservableObject {
 
         if queue[index].status == .queued {
             queue[index].status = .cancelled
+            persistQueueSnapshot()
             statusMessage = "Stopped queued item."
         }
     }
@@ -579,6 +924,7 @@ public final class DownloaderAppState: ObservableObject {
         queue[index].speed = "—"
         queue[index].eta = "—"
         selection = .queue(itemID)
+        persistQueueSnapshot()
         statusMessage = "Marked \(queue[index].title) for retry."
     }
 
@@ -598,6 +944,9 @@ public final class DownloaderAppState: ObservableObject {
         }
 
         statusMessage = updatedCount == 0 ? "No failed or stopped items to retry." : "Requeued \(updatedCount) item(s)."
+        if updatedCount > 0 {
+            persistQueueSnapshot()
+        }
     }
 
     func clearFinishedItems() {
@@ -614,6 +963,7 @@ public final class DownloaderAppState: ObservableObject {
         if case let .queue(id) = selection, removableIDs.contains(id) {
             selection = .overview
         }
+        persistQueueSnapshot()
         statusMessage = "Cleared \(removableIDs.count) finished item(s)."
     }
 
@@ -623,10 +973,11 @@ public final class DownloaderAppState: ObservableObject {
         if case .queue(itemID) = selection {
             selection = .overview
         }
+        persistQueueSnapshot()
     }
 
     func persistConfiguration(showStatusMessage: Bool = false) {
-        settingsStore.saveConfiguration(configuration)
+        persistWorkbenchState()
         if showStatusMessage {
             statusMessage = "Settings saved."
         }
@@ -681,13 +1032,48 @@ public final class DownloaderAppState: ObservableObject {
         revealFile(at: entry.filePath)
     }
 
+    func revealDestination(for asset: MediaAsset) {
+        revealFile(at: asset.file.path)
+    }
+
+    func removeMediaAsset(_ assetID: UUID) throws {
+        mediaLibraryAssets = try mediaLibraryStore.remove(assetIDs: [assetID])
+        if case let .library(selectedID)? = selection, selectedID == assetID {
+            selection = .libraryBrowser
+        }
+        statusMessage = "Removed media from library."
+    }
+
+    func updatePlaybackPosition(
+        for assetID: UUID,
+        position: TimeInterval,
+        completed: Bool,
+        playedAt: Date = Date()
+    ) throws {
+        try mediaLibraryStore.updatePlayback(
+            assetID: assetID,
+            position: position,
+            completed: completed,
+            playedAt: playedAt
+        )
+        mediaLibraryAssets = try mediaLibraryStore.loadAssets()
+    }
+
     func openSourceURL(_ rawValue: String) {
-        guard let url = URL(string: rawValue) else {
+        guard canOpenSourceURL(rawValue), let url = URL(string: rawValue) else {
             statusMessage = "Invalid URL."
             return
         }
 
         NSWorkspace.shared.open(url)
+    }
+
+    func canOpenSourceURL(_ rawValue: String) -> Bool {
+        guard let scheme = URL(string: rawValue)?.scheme?.lowercased() else {
+            return false
+        }
+
+        return ["http", "https"].contains(scheme)
     }
 
     func copyToClipboard(_ rawValue: String, label: String) {
@@ -702,6 +1088,57 @@ public final class DownloaderAppState: ObservableObject {
         recentHistoryLimit = DownloaderAppPreferences.recentHistoryLimit(defaults)
         themePreset = DownloaderAppPreferences.theme(defaults)
         objectWillChange.send()
+    }
+
+    private func upsertMediaAsset(from item: DownloadQueueItem, destination: String) {
+        let fileURL = URL(fileURLWithPath: destination)
+        var asset = MediaAsset(
+            title: item.title,
+            source: URL(string: item.url) ?? URL(fileURLWithPath: item.url),
+            file: fileURL,
+            mode: item.mode
+        )
+        if let metadata = try? probeMetadata(for: fileURL) {
+            asset.duration = metadata.duration
+            asset.container = metadata.container
+            asset.codecs = metadata.codecs
+            asset.resolution = metadata.resolution
+        }
+
+        do {
+            try mediaLibraryStore.upsert(asset)
+            mediaLibraryAssets = try mediaLibraryStore.markMissingFiles()
+        } catch {
+            statusMessage = "Saved history, but library update failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func probeMetadata(for fileURL: URL) throws -> MediaAssetMetadata? {
+        guard let ffprobe = BinaryLocator.locate("ffprobe") else {
+            return nil
+        }
+
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = ffprobe
+        process.arguments = [
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            "-show_chapters",
+            fileURL.path,
+        ]
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        try process.run()
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, !data.isEmpty else {
+            return nil
+        }
+
+        return try MediaProbe.metadata(fromFFProbeJSON: data)
     }
 
     private func apply(line: String, for itemID: UUID) {

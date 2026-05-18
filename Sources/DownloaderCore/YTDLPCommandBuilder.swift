@@ -53,8 +53,26 @@ public enum YTDLPCommandBuilder {
             args += ["--sponsorblock-remove", "all"]
         }
 
-        if configuration.embedSubtitles && mode == .video {
-            args += ["--write-subs", "--embed-subs", "--sub-langs", configuration.subtitleLangs]
+        if mode == .video {
+            let shouldWriteManualSubtitles = configuration.embedSubtitles || configuration.saveSubtitleFiles
+            let shouldUseSubtitles = shouldWriteManualSubtitles || configuration.writeAutoSubtitles
+
+            if shouldWriteManualSubtitles {
+                args += ["--write-subs"]
+            }
+
+            if configuration.writeAutoSubtitles {
+                args += ["--write-auto-subs"]
+            }
+
+            if shouldUseSubtitles {
+                args += ["--sub-langs", normalizedSubtitleLanguages(configuration.subtitleLangs)]
+                args += ["--convert-subs", normalizedSubtitleFormat(configuration.subtitleFormat)]
+            }
+
+            if configuration.embedSubtitles {
+                args += ["--embed-subs"]
+            }
         }
 
         if configuration.embedThumbnail {
@@ -156,6 +174,22 @@ public enum YTDLPCommandBuilder {
         default:
             return "mp4"
         }
+    }
+
+    private static func normalizedSubtitleFormat(_ rawValue: String) -> String {
+        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "vtt":
+            return "vtt"
+        case "ass":
+            return "ass"
+        default:
+            return "srt"
+        }
+    }
+
+    private static func normalizedSubtitleLanguages(_ rawValue: String) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "en" : trimmed
     }
 
     private static func shellEscaped(_ value: String) -> String {

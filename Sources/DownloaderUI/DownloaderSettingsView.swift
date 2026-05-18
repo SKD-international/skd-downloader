@@ -154,7 +154,6 @@ struct DownloaderSettingsView: View {
         Form {
             Section("Download Behavior") {
                 Toggle("SponsorBlock", isOn: $appState.configuration.sponsorBlock)
-                Toggle("Embed Subtitles", isOn: $appState.configuration.embedSubtitles)
                 Toggle("Embed Thumbnail", isOn: $appState.configuration.embedThumbnail)
                 Toggle("Save Thumbnail File", isOn: $appState.configuration.saveThumbnail)
                 Toggle("Write Audio Tags", isOn: $appState.configuration.writeTags)
@@ -194,7 +193,20 @@ struct DownloaderSettingsView: View {
             }
 
             Section("Subtitles") {
+                Toggle("Embed Subtitles", isOn: $appState.configuration.embedSubtitles)
+                Toggle("Save Subtitle Files", isOn: $appState.configuration.saveSubtitleFiles)
+                Toggle("Use Auto Captions", isOn: $appState.configuration.writeAutoSubtitles)
+
                 TextField("Subtitle Languages", text: $appState.configuration.subtitleLangs)
+
+                Picker("Subtitle Format", selection: $appState.configuration.subtitleFormat) {
+                    Text("SRT").tag("srt")
+                    Text("VTT").tag("vtt")
+                    Text("ASS").tag("ass")
+                }
+
+                Text("Used for video jobs. Save sidecar files when you want subtitles available outside the player.")
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

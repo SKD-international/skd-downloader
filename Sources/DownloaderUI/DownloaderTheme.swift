@@ -212,10 +212,10 @@ private struct DownloaderPanelBackground: View {
                     .stroke(theme.panelStroke, lineWidth: 1)
             }
             .shadow(
-                color: theme.shadowColor.opacity(tone == .strong ? 0.72 : 0.48),
-                radius: tone == .strong ? 18 : 10,
+                color: theme.shadowColor.opacity(tone == .strong ? 0.38 : 0.22),
+                radius: tone == .strong ? 10 : 5,
                 x: 0,
-                y: tone == .strong ? 10 : 5
+                y: tone == .strong ? 5 : 2
             )
     }
 }

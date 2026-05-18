@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible SKD Downloader bug
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security issues, do not file a public issue. Use GitHub private vulnerability reporting when available.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include URLs only when they are safe to share publicly.
+      placeholder: |
+        1. Open...
+        2. Paste...
+        3. Click...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: 0.9.0-beta.7
+  - type: dropdown
+    id: lane
+    attributes:
+      label: App lane
+      options:
+        - Native macOS Homebrew app
+        - Legacy Electron app
+        - Source build
+        - Not sure
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5 Sequoia

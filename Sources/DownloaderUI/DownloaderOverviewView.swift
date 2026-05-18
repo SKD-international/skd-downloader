@@ -1,5 +1,46 @@
 import DownloaderCore
 import SwiftUI
+import UniformTypeIdentifiers
+
+struct DownloaderOverviewLayout: Equatable {
+    let availableWidth: CGFloat
+
+    var horizontalPadding: CGFloat {
+        availableWidth < 1_100 ? 18 : 24
+    }
+
+    var contentMaxWidth: CGFloat {
+        min(max(availableWidth - (horizontalPadding * 2), 0), 1_480)
+    }
+
+    var usesInspectorColumn: Bool {
+        contentMaxWidth >= 960
+    }
+
+    var inspectorWidth: CGFloat {
+        guard usesInspectorColumn else {
+            return 0
+        }
+
+        if contentMaxWidth < 1_120 {
+            return 280
+        }
+
+        return contentMaxWidth < 1_320 ? 320 : 360
+    }
+
+    var columnSpacing: CGFloat {
+        usesInspectorColumn ? (contentMaxWidth < 1_120 ? 16 : 18) : 0
+    }
+
+    var mainColumnWidth: CGFloat {
+        max(contentMaxWidth - inspectorWidth - columnSpacing, 0)
+    }
+
+    var sectionSpacing: CGFloat {
+        16
+    }
+}
 
 struct DownloaderOverviewView: View {
     @ObservedObject private var appState: DownloaderAppState
@@ -9,20 +50,15 @@ struct DownloaderOverviewView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                commandHeader
-                HStack(alignment: .top, spacing: 16) {
-                    composerSection
-                        .frame(minWidth: 560)
-
-                    engineHealthSection
-                        .frame(width: 360)
-                }
-                queueStateRail
-                workbenchSection
+        GeometryReader { proxy in
+            let layout = DownloaderOverviewLayout(availableWidth: proxy.size.width)
+            ScrollView {
+                overviewContent(layout: layout)
+                    .frame(maxWidth: layout.contentMaxWidth, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, layout.horizontalPadding)
+                    .padding(.vertical, 20)
             }
-            .padding(20)
         }
         .background {
             DownloaderCanvasBackground(theme: theme)
@@ -33,11 +69,48 @@ struct DownloaderOverviewView: View {
         DownloaderThemeStyle(preset: appState.themePreset)
     }
 
+    @ViewBuilder
+    private func overviewContent(layout: DownloaderOverviewLayout) -> some View {
+        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+            commandHeader
+
+            if layout.usesInspectorColumn {
+                HStack(alignment: .top, spacing: layout.columnSpacing) {
+                    mainWorkbench
+                        .frame(width: layout.mainColumnWidth, alignment: .topLeading)
+
+                    inspectorColumn
+                        .frame(width: layout.inspectorWidth, alignment: .topLeading)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+                    mainWorkbench
+                    inspectorColumn
+                }
+            }
+        }
+    }
+
+    private var mainWorkbench: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            composerSection
+            queueStateRail
+            queueWorkbenchColumn
+        }
+    }
+
+    private var inspectorColumn: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            engineHealthSection
+            recentHistoryColumn
+        }
+    }
+
     private var commandHeader: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("SKD Command Deck")
-                    .font(.system(size: 22, weight: .bold))
+                Text("SKD Downloader")
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
                 Text(appState.isBinaryInstalled ? appState.binaryPath : "Install yt-dlp and ffmpeg to enable downloads.")
@@ -46,57 +119,38 @@ struct DownloaderOverviewView: View {
                     .lineLimit(1)
             }
 
-            HStack(spacing: 8) {
-                CommandStatusChip(
-                    title: appState.engineHealth.isReady ? "Engine" : "Setup",
-                    value: appState.engineHealth.statusTitle,
-                    tint: appState.engineHealth.isReady ? theme.success : theme.warning,
-                    theme: theme
-                )
-
-                CommandStatusChip(
-                    title: "Queue",
-                    value: "\(appState.queueSummary.total) jobs",
-                    tint: theme.tint,
-                    theme: theme
-                )
-            }
-
             Spacer()
 
-            Button {
-                appState.pasteURLFromClipboard()
-            } label: {
-                Label("Paste", systemImage: "doc.on.clipboard")
-            }
-            .buttonStyle(.bordered)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    commandStatusChips
+                }
 
-            Button {
-                Task { await appState.startQueue() }
-            } label: {
-                Label("Start Queue", systemImage: "arrow.down.circle.fill")
+                VStack(alignment: .trailing, spacing: 8) {
+                    commandStatusChips
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!appState.canStartQueue)
-
-            Button(role: .destructive) {
-                appState.stopDownloads()
-            } label: {
-                Label("Stop", systemImage: "stop.circle.fill")
-            }
-            .buttonStyle(.bordered)
-            .disabled(!appState.canStopDownloads)
-
-            Button {
-                appState.openOutputFolder()
-            } label: {
-                Label("Output", systemImage: "folder")
-            }
-            .buttonStyle(.bordered)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .downloaderPanel(theme: theme, tone: .strong, radius: 14)
+    }
+
+    @ViewBuilder
+    private var commandStatusChips: some View {
+        CommandStatusChip(
+            title: appState.engineHealth.isReady ? "Engine" : "Setup",
+            value: appState.engineHealth.statusTitle,
+            tint: appState.engineHealth.isReady ? theme.success : theme.warning,
+            theme: theme
+        )
+
+        CommandStatusChip(
+            title: "Queue",
+            value: "\(appState.queueSummary.total) jobs",
+            tint: theme.tint,
+            theme: theme
+        )
     }
 
     private var engineHealthSection: some View {
@@ -153,7 +207,7 @@ struct DownloaderOverviewView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
-                    Text("One URL per line. Queue first, inspect formats when needed.")
+                    Text("Paste links or notes. SKD extracts supported URLs before queueing.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
@@ -164,7 +218,7 @@ struct DownloaderOverviewView: View {
                     Button {
                         appState.pasteURLFromClipboard()
                     } label: {
-                        Label("Paste URL", systemImage: "doc.on.clipboard")
+                        Label("Paste Links", systemImage: "doc.on.clipboard")
                     }
                     .buttonStyle(.bordered)
 
@@ -189,50 +243,17 @@ struct DownloaderOverviewView: View {
                                 .stroke(theme.panelStroke, lineWidth: 1)
                         }
                 }
-
-            HStack(alignment: .top, spacing: 12) {
-                Picker("Mode", selection: $appState.selectedMode) {
-                    Text("Video").tag(DownloadMode.video)
-                    Text("Audio").tag(DownloadMode.audio)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 184)
-
-                if appState.selectedMode == .video {
-                    Picker("Format", selection: $appState.configuration.videoFormat) {
-                        Text("MP4").tag("mp4")
-                        Text("MKV").tag("mkv")
-                        Text("WebM").tag("webm")
-                    }
-                    .frame(width: 150)
-
-                    Picker("Quality", selection: $appState.configuration.videoQuality) {
-                        Text("Highest").tag("highest")
-                        Text("1080p").tag("1080")
-                        Text("720p").tag("720")
-                        Text("480p").tag("480")
-                    }
-                    .frame(width: 150)
-                } else {
-                    Picker("Format", selection: $appState.configuration.audioFormat) {
-                        Text("MP3").tag("mp3")
-                        Text("M4A").tag("m4a")
-                        Text("FLAC").tag("flac")
-                        Text("WAV").tag("wav")
-                    }
-                    .frame(width: 150)
-
-                    Picker("Bitrate", selection: $appState.configuration.audioBitrate) {
-                        Text("320K").tag("320")
-                        Text("256K").tag("256")
-                        Text("192K").tag("192")
-                        Text("128K").tag("128")
-                    }
-                    .frame(width: 150)
+                .onDrop(of: [UTType.url.identifier, UTType.plainText.identifier, UTType.text.identifier], isTargeted: nil) { providers in
+                    handleDroppedURLProviders(providers)
                 }
 
-                Spacer(minLength: 0)
-            }
+            downloadOptionControls
+
+            SmartModeSummaryRail(
+                preset: appState.selectedDownloadPreset,
+                configuration: appState.configuration,
+                theme: theme
+            )
 
             HStack(spacing: 10) {
                 Text(formatHint)
@@ -256,31 +277,117 @@ struct DownloaderOverviewView: View {
         .downloaderPanel(theme: theme, tone: .accent, radius: 14)
     }
 
-    private var queueStateRail: some View {
-        HStack(spacing: 1) {
-            QueueRailSegment(title: "Queued", value: "\(appState.queueSummary.queued)", symbol: "clock", tint: theme.warning, theme: theme)
-            QueueRailSegment(title: "Active", value: "\(appState.queueSummary.active)", symbol: "arrow.down.circle.fill", tint: theme.tint, theme: theme)
-            QueueRailSegment(title: "Completed", value: "\(appState.queueSummary.completed)", symbol: "checkmark.circle.fill", tint: theme.success, theme: theme)
-            QueueRailSegment(title: "Failed", value: "\(appState.queueSummary.failed)", symbol: "exclamationmark.triangle.fill", tint: theme.danger, theme: theme)
+    private var downloadOptionControls: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                smartModePicker
+                modePicker
+                formatPicker
+                qualityPicker
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    smartModePicker
+                    modePicker
+                    Spacer(minLength: 0)
+                }
+
+                HStack(alignment: .top, spacing: 12) {
+                    formatPicker
+                    qualityPicker
+                    Spacer(minLength: 0)
+                }
+            }
         }
-        .padding(8)
+    }
+
+    private var smartModePicker: some View {
+        Picker("Smart Mode", selection: Binding(
+            get: { appState.selectedDownloadPreset },
+            set: { appState.applyDownloadPreset($0) }
+        )) {
+            ForEach(DownloadPreset.allCases) { preset in
+                Text(preset.displayName).tag(preset)
+            }
+        }
+        .frame(width: 210)
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $appState.selectedMode) {
+            Text("Video").tag(DownloadMode.video)
+            Text("Audio").tag(DownloadMode.audio)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 184)
+    }
+
+    private var formatPicker: some View {
+        Group {
+            if appState.selectedMode == .video {
+                Picker("Format", selection: $appState.configuration.videoFormat) {
+                    Text("MP4").tag("mp4")
+                    Text("MKV").tag("mkv")
+                    Text("WebM").tag("webm")
+                }
+            } else {
+                Picker("Format", selection: $appState.configuration.audioFormat) {
+                    Text("MP3").tag("mp3")
+                    Text("M4A").tag("m4a")
+                    Text("FLAC").tag("flac")
+                    Text("WAV").tag("wav")
+                }
+            }
+        }
+        .frame(width: 150)
+    }
+
+    private var qualityPicker: some View {
+        Group {
+            if appState.selectedMode == .video {
+                Picker("Quality", selection: $appState.configuration.videoQuality) {
+                    Text("Highest").tag("highest")
+                    Text("1080p").tag("1080")
+                    Text("720p").tag("720")
+                    Text("480p").tag("480")
+                }
+            } else {
+                Picker("Bitrate", selection: $appState.configuration.audioBitrate) {
+                    Text("320K").tag("320")
+                    Text("256K").tag("256")
+                    Text("192K").tag("192")
+                    Text("128K").tag("128")
+                }
+            }
+        }
+        .frame(width: 150)
+    }
+
+    private var queueStateRail: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 1) {
+                queueRailSegments
+            }
+
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1),
+            ], spacing: 1) {
+                queueRailSegments
+            }
+        }
+        .padding(6)
         .downloaderPanel(theme: theme, radius: 14)
     }
 
-    private var workbenchSection: some View {
-        HStack(alignment: .top, spacing: 18) {
-            queueWorkbenchColumn
-
-            previewColumn(
-                title: "Recent History",
-                emptyState: "No completed downloads yet.",
-                content: {
-                    ForEach(appState.overviewHistoryEntries) { entry in
-                        PreviewHistoryRow(entry: entry, theme: theme)
-                    }
-                }
-            )
-        }
+    @ViewBuilder
+    private var queueRailSegments: some View {
+        QueueRailSegment(title: "Queued", value: "\(appState.queueSummary.queued)", symbol: "clock", tint: theme.warning, theme: theme)
+        QueueRailSegment(title: "Active", value: "\(appState.queueSummary.active)", symbol: "arrow.down.circle.fill", tint: theme.tint, theme: theme)
+        QueueRailSegment(title: "Completed", value: "\(appState.queueSummary.completed)", symbol: "checkmark.circle.fill", tint: theme.success, theme: theme)
+        QueueRailSegment(title: "Failed", value: "\(appState.queueSummary.failed)", symbol: "exclamationmark.triangle.fill", tint: theme.danger, theme: theme)
     }
 
     private var queueWorkbenchColumn: some View {
@@ -314,6 +421,18 @@ struct DownloaderOverviewView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .downloaderPanel(theme: theme, radius: 14)
+    }
+
+    private var recentHistoryColumn: some View {
+        previewColumn(
+            title: "Recent History",
+            emptyState: "No completed downloads yet.",
+            content: {
+                ForEach(appState.overviewHistoryEntries) { entry in
+                    PreviewHistoryRow(entry: entry, theme: theme)
+                }
+            }
+        )
     }
 
     private func previewColumn<Content: View>(title: String, emptyState: String, @ViewBuilder content: () -> Content) -> some View {
@@ -367,6 +486,130 @@ struct DownloaderOverviewView: View {
             return "MP4 is still the safest default for Apple playback and Finder previews."
         }
     }
+
+    private func handleDroppedURLProviders(_ providers: [NSItemProvider]) -> Bool {
+        var didScheduleLoad = false
+        let appState = appState
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                didScheduleLoad = true
+                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, _ in
+                    let text: String?
+                    if let url = item as? URL {
+                        text = url.absoluteString
+                    } else if let data = item as? Data {
+                        text = String(data: data, encoding: .utf8)
+                    } else {
+                        text = item as? String
+                    }
+                    appendDroppedURLText(text, appState: appState)
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                didScheduleLoad = true
+                provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+                    let text: String?
+                    if let data = item as? Data {
+                        text = String(data: data, encoding: .utf8)
+                    } else {
+                        text = item as? String
+                    }
+                    appendDroppedURLText(text, appState: appState)
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+                didScheduleLoad = true
+                provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
+                    let text: String?
+                    if let data = item as? Data {
+                        text = String(data: data, encoding: .utf8)
+                    } else {
+                        text = item as? String
+                    }
+                    appendDroppedURLText(text, appState: appState)
+                }
+            }
+        }
+
+        return didScheduleLoad
+    }
+
+    private nonisolated func appendDroppedURLText(_ text: String?, appState: DownloaderAppState) {
+        guard let text else {
+            return
+        }
+
+        Task { @MainActor in
+            appState.appendURLTextToComposer(
+                text,
+                verb: "Dropped",
+                emptyMessage: "Dropped content does not contain a supported URL.",
+                duplicateMessage: "Dropped URLs are already in the composer."
+            )
+        }
+    }
+}
+
+private struct SmartModeSummaryRail: View {
+    let preset: DownloadPreset
+    let configuration: DownloadConfiguration
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(preset.displayName.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(theme.tint)
+
+                Text(preset.summary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 10)
+
+            HStack(spacing: 6) {
+                if configuration.embedSubtitles {
+                    SmartModeSignalPill(title: "Embedded Subs", symbol: "captions.bubble", tint: theme.secondaryTint, theme: theme)
+                }
+
+                if configuration.saveSubtitleFiles {
+                    SmartModeSignalPill(title: configuration.subtitleFormat.uppercased(), symbol: "text.badge.checkmark", tint: theme.tint, theme: theme)
+                }
+
+                if configuration.writeAutoSubtitles {
+                    SmartModeSignalPill(title: "Auto", symbol: "wand.and.sparkles", tint: theme.warning, theme: theme)
+                }
+
+                if configuration.downloadArchiveEnabled {
+                    SmartModeSignalPill(title: "Archive", symbol: "tray.full", tint: theme.success, theme: theme)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct SmartModeSignalPill: View {
+    let title: String
+    let symbol: String
+    let tint: Color
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Capsule(style: .continuous).fill(tint.opacity(theme.isLight ? 0.09 : 0.13)))
+    }
 }
 
 private struct CommandStatusChip: View {
@@ -409,23 +652,23 @@ private struct QueueRailSegment: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 18)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(theme.mutedText)
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.mutedText)
 
-                Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.bodyText)
-            }
+            Spacer(minLength: 6)
+
+            Text(value)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(theme.bodyText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(tint.opacity(theme.isLight ? 0.07 : 0.1))

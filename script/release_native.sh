@@ -29,6 +29,7 @@ trap cleanup EXIT
 update_cask_metadata() {
   local checksum="$1"
   local asset_id="${2:-}"
+  local private_asset_cask="${SKD_RELEASE_PRIVATE_ASSET:-0}"
   local cask_paths=(
     "$ROOT_DIR/homebrew/skd-downloader.rb"
     "/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb"
@@ -36,11 +37,30 @@ update_cask_metadata() {
 
   for cask_path in "${cask_paths[@]}"; do
     if [[ -f "$cask_path" ]]; then
-      SKD_RELEASE_VERSION="$VERSION" SKD_RELEASE_SHA="$checksum" SKD_RELEASE_ASSET_ID="$asset_id" perl -0pi -e '
+      SKD_RELEASE_VERSION="$VERSION" \
+        SKD_RELEASE_SHA="$checksum" \
+        SKD_RELEASE_ASSET_ID="$asset_id" \
+        SKD_RELEASE_PRIVATE_ASSET="$private_asset_cask" \
+        perl -0pi -e '
         s/version "[^"]+"/version "$ENV{SKD_RELEASE_VERSION}"/;
         s/sha256 (?::no_check|"[a-f0-9]{64}")/sha256 "$ENV{SKD_RELEASE_SHA}"/;
-        if ($ENV{SKD_RELEASE_ASSET_ID}) {
-          s!url "https://(?:api\.github\.com/repos/SKD-international/skd-downloader/releases/assets/\d+(?:\?version=\#\{version\})?|github\.com/SKD-international/skd-downloader/releases/download/v\#\{version\}/SKD\.Downloader\.Native-\#\{version\}-mac\.zip)"!url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/$ENV{SKD_RELEASE_ASSET_ID}?version=#{version}"!;
+        my $asset_id = $ENV{SKD_RELEASE_ASSET_ID} || "";
+        my $private_asset_cask = ($ENV{SKD_RELEASE_PRIVATE_ASSET} || "0") eq "1";
+        my $public_url = q{  url "https://github.com/SKD-international/skd-downloader/releases/download/v#{version}/SKD.Downloader.Native-#{version}-mac.zip"};
+        my $token_block = q{  github_token = ENV.fetch("HOMEBREW_GITHUB_API_TOKEN") do
+    raise "HOMEBREW_GITHUB_API_TOKEN is required to install this private beta cask"
+  end
+
+};
+
+        s/\n  github_token = ENV\.fetch\("HOMEBREW_GITHUB_API_TOKEN"\) do\n    raise "HOMEBREW_GITHUB_API_TOKEN is required to install this private beta cask"\n  end\n\n/\n/;
+        s/,\n      header: \[\n        "Accept: application\/octet-stream",\n        "Authorization: Bearer #\{github_token\}",\n      \]//;
+
+        if ($private_asset_cask && $asset_id ne "") {
+          my $private_url = qq{  url "https://api.github.com/repos/SKD-international/skd-downloader/releases/assets/$asset_id?version=#{version}",\n      header: [\n        "Accept: application/octet-stream",\n        "Authorization: Bearer #{github_token}",\n      ]};
+          s/^  url "https:\/\/[^"]+"\n/$token_block$private_url\n/m;
+        } else {
+          s/^  url "https:\/\/[^"]+"\n/$public_url\n/m;
         }
       ' "$cask_path"
     fi
@@ -69,6 +89,11 @@ Environment:
   SKD_NOTARY_SYNC=1       Store the notarytool profile in iCloud Keychain.
   SKD_ALLOW_UNNOTARIZED_UPLOAD=1
                            Allow --upload without --notarize.
+  SKD_RELEASE_PRIVATE_ASSET=1
+                           After --upload, rewrite casks to GitHub's release
+                           asset API URL. That private-beta cask requires
+                           HOMEBREW_GITHUB_API_TOKEN at install time. Default
+                           casks use the public GitHub release download URL.
   SKD_SKIP_CODESIGN=1     Skip codesigning for local debugging only.
 
 Options:

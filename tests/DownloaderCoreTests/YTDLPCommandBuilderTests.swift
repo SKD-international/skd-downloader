@@ -21,6 +21,88 @@ func audioArgsIncludeExtractionFlags() {
 }
 
 @Test
+func downloadPresetAppliesPodcastAudioSettingsAndArgs() throws {
+    let applied = try DownloadPreset.podcastAudio.applying(to: DownloadConfiguration())
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: applied.configuration,
+        mode: applied.mode,
+        formatOverride: applied.format,
+        qualityOverride: applied.quality
+    )
+
+    #expect(applied.mode == .audio)
+    #expect(applied.configuration.audioFormat == "m4a")
+    #expect(applied.configuration.audioBitrate == "256")
+    #expect(applied.configuration.writeTags)
+    #expect(applied.configuration.embedThumbnail)
+    #expect(applied.configuration.downloadArchiveEnabled)
+    #expect(args.contains("--audio-format"))
+    #expect(args.contains("m4a"))
+    #expect(args.contains("--audio-quality"))
+    #expect(args.contains("256K"))
+    #expect(args.contains("--download-archive"))
+}
+
+@Test
+func downloadPresetAppliesArchiveMirrorSettingsAndArgs() throws {
+    let applied = try DownloadPreset.archiveMirror.applying(to: DownloadConfiguration())
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: applied.configuration,
+        mode: applied.mode,
+        formatOverride: applied.format,
+        qualityOverride: applied.quality
+    )
+
+    #expect(applied.mode == .video)
+    #expect(applied.configuration.videoFormat == "mkv")
+    #expect(applied.configuration.videoQuality == "highest")
+    #expect(applied.configuration.embedSubtitles)
+    #expect(applied.configuration.saveThumbnail)
+    #expect(applied.configuration.writeInfoJSON)
+    #expect(applied.configuration.writeDescription)
+    #expect(applied.configuration.downloadArchiveEnabled)
+    #expect(args.contains("--write-info-json"))
+    #expect(args.contains("--write-description"))
+    #expect(args.contains("--write-thumbnail"))
+    #expect(args.contains("--write-subs"))
+    #expect(args.contains("--download-archive"))
+}
+
+@Test
+func downloadPresetAppliesCaptionPackSettingsAndArgs() throws {
+    let applied = try DownloadPreset.captionPack.applying(to: DownloadConfiguration())
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: applied.configuration,
+        mode: applied.mode,
+        formatOverride: applied.format,
+        qualityOverride: applied.quality
+    )
+
+    #expect(applied.mode == .video)
+    #expect(applied.configuration.videoFormat == "mp4")
+    #expect(applied.configuration.videoQuality == "1080")
+    #expect(applied.configuration.embedSubtitles)
+    #expect(applied.configuration.saveSubtitleFiles)
+    #expect(applied.configuration.writeAutoSubtitles)
+    #expect(applied.configuration.subtitleFormat == "srt")
+    #expect(args.contains("--write-subs"))
+    #expect(args.contains("--write-auto-subs"))
+    #expect(args.contains("--embed-subs"))
+    #expect(args.contains("--convert-subs"))
+    #expect(args.contains("srt"))
+}
+
+@Test
+func customDownloadPresetCannotBeAppliedAsConcretePreset() throws {
+    #expect(throws: DownloadPresetError.customPresetCannotBeApplied) {
+        _ = try DownloadPreset.custom.applying(to: DownloadConfiguration())
+    }
+}
+
+@Test
 func newConfigurationsDoNotImportBrowserCookiesByDefault() throws {
     let home = try temporaryHome()
     defer { try? FileManager.default.removeItem(at: home) }
@@ -137,6 +219,32 @@ func archiveSidecarAndFragmentArgsAreIncludedWhenEnabled() {
 }
 
 @Test
+func subtitleSidecarArgsCanBeSavedWithoutEmbedding() {
+    let config = DownloadConfiguration(
+        embedSubtitles: false,
+        subtitleLangs: "en,hr",
+        saveSubtitleFiles: true,
+        writeAutoSubtitles: true,
+        subtitleFormat: "srt"
+    )
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: config,
+        mode: .video,
+        formatOverride: "mp4",
+        qualityOverride: "1080"
+    )
+
+    #expect(args.contains("--write-subs"))
+    #expect(args.contains("--write-auto-subs"))
+    #expect(args.contains("--sub-langs"))
+    #expect(args.contains("en,hr"))
+    #expect(args.contains("--convert-subs"))
+    #expect(args.contains("srt"))
+    #expect(!args.contains("--embed-subs"))
+}
+
+@Test
 func audioDownloadsDoNotIncludeVideoChapterEmbedding() {
     let config = DownloadConfiguration(embedChapters: true)
     let args = YTDLPCommandBuilder.build(
@@ -184,6 +292,9 @@ func oldConfigurationJSONDecodesWithNewDefaults() throws {
 
     #expect(config.downloadFolderVideo == "/tmp/videos")
     #expect(config.skipExisting)
+    #expect(!config.saveSubtitleFiles)
+    #expect(!config.writeAutoSubtitles)
+    #expect(config.subtitleFormat == "srt")
     #expect(!config.writeInfoJSON)
     #expect(!config.writeDescription)
     #expect(config.embedChapters)
@@ -441,6 +552,76 @@ func downloaderThemeAcceptsKnownStoredValue() {
     defaults.set(DownloaderThemePreset.raycastPulse.rawValue, forKey: DownloaderAppPreferences.themeKey)
 
     #expect(DownloaderAppPreferences.theme(defaults) == .raycastPulse)
+}
+
+@Test
+func urlInputParserExtractsSupportedURLsFromPastedText() {
+    let input = """
+    Save these:
+    https://www.youtube.com/watch?v=abc123
+    and this one (https://vimeo.com/12345).
+    Ignore ftp://example.com/movie and file:///tmp/movie.mp4.
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://www.youtube.com/watch?v=abc123",
+        "https://vimeo.com/12345",
+    ])
+}
+
+@Test
+func urlInputParserTrimsSurroundingPunctuationWithoutBreakingQueries() {
+    let input = """
+    First: <https://example.com/watch?v=abc123&list=PL_1>.
+    Balanced query stays: https://example.com/search?q=(clip)
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://example.com/watch?v=abc123&list=PL_1",
+        "https://example.com/search?q=(clip)",
+    ])
+}
+
+@Test
+func urlInputParserNormalizesSchemeLessMediaLinks() {
+    let input = """
+    queue youtube.com/watch?v=abc123
+    and (www.twitch.tv/videos/98765).
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://youtube.com/watch?v=abc123",
+        "https://www.twitch.tv/videos/98765",
+    ])
+}
+
+@Test
+func urlInputParserPreservesOrderAndRemovesDuplicates() {
+    let input = """
+    https://youtu.be/first
+    https://youtu.be/first
+    https://youtu.be/second,
+    https://youtu.be/first
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input) == [
+        "https://youtu.be/first",
+        "https://youtu.be/second",
+    ])
+}
+
+@Test
+func urlInputParserRejectsUnsupportedAndIncompleteURLs() {
+    let input = """
+    ftp://example.com/video
+    file:///tmp/video.mp4
+    http://
+    https://
+    www.youtube.com
+    youtube.com
+    """
+
+    #expect(URLInputParser.extractSupportedURLs(from: input).isEmpty)
 }
 
 private func temporaryHome() throws -> URL {

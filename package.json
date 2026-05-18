@@ -1,7 +1,7 @@
 {
   "name": "skd-downloader",
   "version": "0.9.0-beta.7",
-  "description": "A premium yt-dlp GUI for Mac and Windows — free Media Human alternative",
+  "description": "Open-source yt-dlp downloader with a native macOS Homebrew app and legacy Electron lane",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

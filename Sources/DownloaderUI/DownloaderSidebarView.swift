@@ -42,6 +42,23 @@ struct DownloaderSidebarView: View {
                     }
                 }
             }
+
+            Section("Library") {
+                NavigationLink(value: DownloaderSidebarSelection.libraryBrowser) {
+                    Label("Library", systemImage: "rectangle.stack")
+                }
+
+                if appState.mediaLibraryAssets.isEmpty {
+                    Text("No saved media")
+                        .font(.caption)
+                        .foregroundStyle(theme.mutedText)
+                } else {
+                    ForEach(appState.filteredMediaLibraryAssets.prefix(12)) { asset in
+                        MediaAssetSidebarRow(asset: asset, theme: theme)
+                            .tag(DownloaderSidebarSelection.library(asset.id))
+                    }
+                }
+            }
         }
         .listStyle(.sidebar)
         .navigationTitle("SKD Downloader")
@@ -138,5 +155,65 @@ private struct HistorySidebarRow: View {
                     .lineLimit(1)
             }
         }
+    }
+}
+
+private struct MediaAssetSidebarRow: View {
+    let asset: MediaAsset
+    let theme: DownloaderThemeStyle
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: iconName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(asset.isMissing ? theme.warning : theme.modeColor(asset.mode))
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(asset.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+
+                Text(detail)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.mutedText)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var iconName: String {
+        if asset.isMissing {
+            return "exclamationmark.triangle.fill"
+        }
+
+        return asset.mode == .video ? "play.rectangle.fill" : "waveform.circle.fill"
+    }
+
+    private var detail: String {
+        if asset.isMissing {
+            return "Missing file"
+        }
+
+        if let duration = asset.duration {
+            return "\(asset.mode.rawValue.capitalized) - \(duration.formattedDuration)"
+        }
+
+        return asset.mode.rawValue.capitalized
+    }
+}
+
+private extension TimeInterval {
+    var formattedDuration: String {
+        let totalSeconds = max(0, Int(self.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours):\(String(format: "%02d", minutes)):\(String(format: "%02d", seconds))"
+        }
+
+        return "\(minutes):\(String(format: "%02d", seconds))"
     }
 }
