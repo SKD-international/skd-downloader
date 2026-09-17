@@ -29,6 +29,28 @@ public final class MediaLibraryStore: @unchecked Sendable {
         }
     }
 
+    /// Adds a finished download to the library, probing the file for duration, container,
+    /// codecs, and resolution when ffprobe is available.
+    @discardableResult
+    public func recordDownload(title: String, source: String, filePath: String, mode: DownloadMode) throws -> MediaAsset {
+        let fileURL = URL(fileURLWithPath: filePath)
+        var asset = MediaAsset(
+            title: title,
+            source: URL(string: source) ?? URL(fileURLWithPath: source),
+            file: fileURL,
+            mode: mode
+        )
+        if let metadata = MediaProbe.probe(fileURL: fileURL) {
+            asset.duration = metadata.duration
+            asset.container = metadata.container
+            asset.codecs = metadata.codecs
+            asset.resolution = metadata.resolution
+        }
+
+        try upsert(asset)
+        return asset
+    }
+
     @discardableResult
     public func remove(assetIDs: Set<UUID>) throws -> [MediaAsset] {
         try lock.withLock {

@@ -1185,54 +1185,12 @@ public final class DownloaderAppState: ObservableObject {
     }
 
     private func upsertMediaAsset(from item: DownloadQueueItem, destination: String) {
-        let fileURL = URL(fileURLWithPath: destination)
-        var asset = MediaAsset(
-            title: item.title,
-            source: URL(string: item.url) ?? URL(fileURLWithPath: item.url),
-            file: fileURL,
-            mode: item.mode
-        )
-        if let metadata = try? probeMetadata(for: fileURL) {
-            asset.duration = metadata.duration
-            asset.container = metadata.container
-            asset.codecs = metadata.codecs
-            asset.resolution = metadata.resolution
-        }
-
         do {
-            try mediaLibraryStore.upsert(asset)
+            try mediaLibraryStore.recordDownload(title: item.title, source: item.url, filePath: destination, mode: item.mode)
             mediaLibraryAssets = try mediaLibraryStore.markMissingFiles()
         } catch {
             statusMessage = "Saved history, but library update failed: \(error.localizedDescription)"
         }
-    }
-
-    private func probeMetadata(for fileURL: URL) throws -> MediaAssetMetadata? {
-        guard let ffprobe = BinaryLocator.locate("ffprobe") else {
-            return nil
-        }
-
-        let process = Process()
-        let outputPipe = Pipe()
-        process.executableURL = ffprobe
-        process.arguments = [
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format",
-            "-show_streams",
-            "-show_chapters",
-            fileURL.path,
-        ]
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-        try process.run()
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0, !data.isEmpty else {
-            return nil
-        }
-
-        return try MediaProbe.metadata(fromFFProbeJSON: data)
     }
 
     private func apply(line: String, for itemID: UUID) {

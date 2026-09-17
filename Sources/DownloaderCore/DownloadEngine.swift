@@ -143,9 +143,13 @@ public final class DownloadSettingsStore: @unchecked Sendable {
     }
 
     public func loadHistory() -> [DownloadHistoryEntry] {
+        // Dates are written as ISO 8601 below; decoding with the default strategy silently
+        // emptied the history on every load.
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard
             let data = try? Data(contentsOf: historyURL),
-            let history = try? JSONDecoder().decode([DownloadHistoryEntry].self, from: data)
+            let history = try? decoder.decode([DownloadHistoryEntry].self, from: data)
         else {
             return []
         }

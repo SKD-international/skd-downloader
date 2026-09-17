@@ -196,3 +196,50 @@ func headlessCommandParsesSupportedFlags() {
     #expect(HeadlessCommand(arguments: ["app"]) == nil)
     #expect(HeadlessCommand(arguments: ["app", "-psn_0_1"]) == nil)
 }
+
+@Test
+func historySurvivesReloadAndKeepsEveryEntry() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("skd-history-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = DownloadSettingsStore(rootURL: root)
+
+    store.appendHistory(DownloadHistoryEntry(title: "First", url: "https://a", mode: .video, filePath: "/tmp/a.mp4"))
+    store.appendHistory(DownloadHistoryEntry(title: "Second", url: "https://b", mode: .audio, filePath: "/tmp/b.m4a"))
+
+    let reloaded = DownloadSettingsStore(rootURL: root).loadHistory()
+    #expect(reloaded.map(\.title) == ["Second", "First"])
+}
+
+@Test
+func headlessDownloadRecordsHistoryAndLibrary() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("skd-headless-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appendingPathComponent("Clip.mp4")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data("x".utf8).write(to: file)
+    let store = DownloadSettingsStore(rootURL: root)
+
+    let code = await HeadlessCommand.download("https://example.com/v").run(
+        engine: StubEngine(destination: file.path),
+        settingsStore: store
+    ) { _ in }
+
+    #expect(code == 0)
+    #expect(store.loadHistory().map(\.title) == ["Clip"])
+    #expect(try store.makeMediaLibraryStore().loadAssets().map(\.title) == ["Clip"])
+}
+
+private struct StubEngine: YTDLPEngineClient {
+    let destination: String
+
+    func checkToolchain() async -> EngineHealthReport { EngineHealthReport(tools: []) }
+    func fetchInfo(url: String, configuration: DownloadConfiguration) async throws -> [VideoInfo] { [] }
+    func fetchFormatOptions(url: String, configuration: DownloadConfiguration) async throws -> [YTDLPFormatOption] { [] }
+    func startDownload(
+        url: String, configuration: DownloadConfiguration, mode: DownloadMode, formatOverride: String?,
+        qualityOverride: String?, formatID: String?, cancellationToken: DownloadCancellationToken?,
+        onLine: @escaping @Sendable (String) -> Void
+    ) async -> DownloadCommandResult {
+        DownloadCommandResult(exitCode: 0, destination: destination, output: "")
+    }
+}
