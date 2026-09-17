@@ -61,6 +61,25 @@ The native cask supports macOS 14 Sonoma and newer, including macOS 15 Sequoia.
 Release artifacts are universal `arm64` + `x86_64` app bundles for Apple
 Silicon and Intel Macs.
 
+## Intel Macs (Homebrew Tier 3)
+
+Homebrew stopped building bottles for macOS on Intel in September 2026, so the
+cask's `yt-dlp` and `ffmpeg` formula dependencies try to compile from source.
+On Intel Macs install the notarized app zip from the GitHub release directly and
+use the official standalone tools, which the app finds in `/usr/local/bin`:
+
+```bash
+curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip
+ditto -xk /tmp/deno.zip /usr/local/bin
+chmod +x /usr/local/bin/yt-dlp /usr/local/bin/deno
+```
+
+Verify each download against the release checksums (`SHA2-256SUMS` for yt-dlp,
+`.sha256sum` for Deno). YouTube needs a current `yt-dlp` plus the Deno JavaScript
+runtime; older builds fail with `HTTP Error 403`. Existing Homebrew `ffmpeg` keeps
+working.
+
 ## What The App Expects
 
 - `yt-dlp` must be available through Homebrew
