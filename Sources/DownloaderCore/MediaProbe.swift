@@ -105,3 +105,30 @@ private struct FFProbeChapter: Decodable {
         let title: String?
     }
 }
+
+public extension MediaProbe {
+    /// Runs ffprobe on a finished file. Returns nil when ffprobe is missing or the file is unreadable.
+    static func probe(fileURL: URL, ffprobe: URL? = BinaryLocator.locate("ffprobe")) -> MediaAssetMetadata? {
+        guard let ffprobe else {
+            return nil
+        }
+
+        let process = Process()
+        let outputPipe = Pipe()
+        process.executableURL = ffprobe
+        process.arguments = ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", fileURL.path]
+        process.standardOutput = outputPipe
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else {
+            return nil
+        }
+
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, !data.isEmpty else {
+            return nil
+        }
+
+        return try? metadata(fromFFProbeJSON: data)
+    }
+}

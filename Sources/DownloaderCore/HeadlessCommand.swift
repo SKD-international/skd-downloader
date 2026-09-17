@@ -30,7 +30,7 @@ public enum HeadlessCommand: Equatable, Sendable {
 
     /// Runs the command and returns the process exit code. `print` receives every output line.
     public func run(
-        engine: YTDLPEngine = YTDLPEngine(),
+        engine: YTDLPEngineClient = YTDLPEngine(),
         settingsStore: DownloadSettingsStore = DownloadSettingsStore(),
         print: @escaping @Sendable (String) -> Void
     ) async -> Int32 {
@@ -67,6 +67,15 @@ public enum HeadlessCommand: Equatable, Sendable {
                 onLine: print
             )
             if result.exitCode == 0 {
+                if let destination = result.destination {
+                    let title = URL(fileURLWithPath: destination).deletingPathExtension().lastPathComponent
+                    settingsStore.appendHistory(DownloadHistoryEntry(title: title, url: url, mode: .video, filePath: destination))
+                    do {
+                        try settingsStore.makeMediaLibraryStore().recordDownload(title: title, source: url, filePath: destination, mode: .video)
+                    } catch {
+                        print("Library update failed: \(error.localizedDescription)")
+                    }
+                }
                 print("Saved: \(result.destination ?? "unknown destination")")
                 return 0
             }
