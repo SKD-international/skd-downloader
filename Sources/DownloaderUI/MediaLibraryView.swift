@@ -29,11 +29,11 @@ struct MediaLibraryView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Library")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.skd(size: 26, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
                 Text(savedMediaCountLabel)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.skd(size: 12, weight: .medium))
                     .foregroundStyle(theme.mutedText)
             }
 
@@ -100,15 +100,15 @@ struct MediaLibraryView: View {
     private var emptySearchState: some View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 32, weight: .semibold))
+                .font(.skd(size: 32, weight: .semibold))
                 .foregroundStyle(theme.mutedText)
 
             Text("No matches")
-                .font(.system(size: 17, weight: .bold))
+                .font(.skd(size: 17, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             Text("Try another search or filter.")
-                .font(.system(size: 13, weight: .medium))
+                .font(.skd(size: 13, weight: .medium))
                 .foregroundStyle(theme.mutedText)
 
             Button {
@@ -124,15 +124,15 @@ struct MediaLibraryView: View {
     private func libraryErrorState(_ message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 32, weight: .semibold))
+                .font(.skd(size: 32, weight: .semibold))
                 .foregroundStyle(theme.warning)
 
             Text("Library needs attention")
-                .font(.system(size: 17, weight: .bold))
+                .font(.skd(size: 17, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             Text(message)
-                .font(.system(size: 13, weight: .medium))
+                .font(.skd(size: 13, weight: .medium))
                 .foregroundStyle(theme.mutedText)
                 .multilineTextAlignment(.center)
                 .textSelection(.enabled)
@@ -165,7 +165,7 @@ private struct MediaLibraryAssetRow: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: iconName)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.skd(size: 20, weight: .semibold))
                 .foregroundStyle(asset.isMissing ? theme.warning : theme.modeColor(asset.mode))
                 .frame(width: 34, height: 34)
                 .background {
@@ -175,12 +175,12 @@ private struct MediaLibraryAssetRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(asset.title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.skd(size: 14, weight: .bold))
                     .foregroundStyle(theme.bodyText)
                     .lineLimit(1)
 
                 Text(asset.file.path)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.skd(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }
@@ -189,11 +189,11 @@ private struct MediaLibraryAssetRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(asset.duration.map(\.formattedPlayerDuration) ?? "Unknown")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.bodyText)
 
                 Text(asset.isMissing ? "Missing" : asset.mode.rawValue.capitalized)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.skd(size: 10, weight: .semibold))
                     .foregroundStyle(asset.isMissing ? theme.warning : theme.mutedText)
             }
 
@@ -277,12 +277,12 @@ struct NowPlayingBar: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(asset.title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.skd(size: 12, weight: .bold))
                     .foregroundStyle(theme.bodyText)
                     .lineLimit(1)
 
                 Text("Resume \(asset.playback.position.formattedPlayerDuration)")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.skd(size: 10, weight: .medium))
                     .foregroundStyle(theme.mutedText)
             }
 

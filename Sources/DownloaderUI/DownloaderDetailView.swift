@@ -36,11 +36,11 @@ struct DownloaderQueueDetailView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(item.title)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.skd(size: 24, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
                     Text(item.url)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.mutedText)
                         .textSelection(.enabled)
                 }
@@ -48,7 +48,7 @@ struct DownloaderQueueDetailView: View {
                 Spacer()
 
                 Text(item.status.title.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.bodyText)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -106,7 +106,7 @@ struct DownloaderQueueDetailView: View {
     private var progressCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Progress")
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             ProgressView(value: item.progress, total: 100)
@@ -118,11 +118,10 @@ struct DownloaderQueueDetailView: View {
                 LabeledValue(title: "ETA", value: item.eta, theme: theme)
             }
 
-            if let errorMessage = item.status.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.danger)
-                    .textSelection(.enabled)
+            if let failure = appState.failure(for: item) {
+                FailureCallout(failure: failure, theme: theme, isBusy: appState.installingTool != nil) {
+                    Task { await appState.applyRemedy(failure.remedy, for: item.id) }
+                }
             }
         }
         .padding(22)
@@ -134,11 +133,11 @@ struct DownloaderQueueDetailView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Format Inspector")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.skd(size: 14, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
                     Text(formatInspectorSubtitle)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.skd(size: 11, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
 
@@ -165,7 +164,7 @@ struct DownloaderQueueDetailView: View {
 
             if item.mode == .audio {
                 Text("Audio jobs use the app's audio format and bitrate settings. Video format IDs are ignored for extraction jobs.")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.skd(size: 12, weight: .medium))
                     .foregroundStyle(theme.mutedText)
             } else {
                 if item.isLoadingFormats {
@@ -174,14 +173,14 @@ struct DownloaderQueueDetailView: View {
                             .controlSize(.small)
 
                         Text("Reading format list from yt-dlp.")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.skd(size: 12, weight: .medium))
                             .foregroundStyle(theme.mutedText)
                     }
                 }
 
                 if let formatError = item.formatError {
                     Text(formatError)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.danger)
                         .textSelection(.enabled)
                 }
@@ -208,7 +207,7 @@ struct DownloaderQueueDetailView: View {
                     }
                 } else if !item.isLoadingFormats && item.formatError == nil {
                     Text("Load formats to override yt-dlp automatic quality selection for this item.")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.skd(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
             }
@@ -221,7 +220,7 @@ struct DownloaderQueueDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Command Preview")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.skd(size: 14, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
                 Spacer()
@@ -235,7 +234,7 @@ struct DownloaderQueueDetailView: View {
             }
 
             Text(appState.commandPreview(for: item))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.skd(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.bodyText)
                 .textSelection(.enabled)
                 .lineLimit(8)
@@ -259,11 +258,11 @@ struct DownloaderQueueDetailView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Activity Log")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.skd(size: 14, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
                     Text("\(item.activityLog.count) captured line(s)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.skd(size: 11, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
 
@@ -288,7 +287,7 @@ struct DownloaderQueueDetailView: View {
 
             if item.activityLog.isEmpty {
                 Text("Download process output will appear here once this item starts.")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.skd(size: 12, weight: .medium))
                     .foregroundStyle(theme.mutedText)
             } else {
                 ScrollView {
@@ -318,7 +317,7 @@ struct DownloaderQueueDetailView: View {
     private var metadataCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Metadata")
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             LabeledValue(title: "Mode", value: item.mode.rawValue.capitalized, theme: theme)
@@ -387,11 +386,11 @@ struct DownloaderHistoryDetailView: View {
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(entry.title)
-                .font(.system(size: 24, weight: .bold))
+                .font(.skd(size: 24, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             Text(entry.filePath)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(.skd(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
                 .textSelection(.enabled)
 
@@ -449,7 +448,7 @@ struct DownloaderHistoryDetailView: View {
     private var recordCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Download Record")
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             LabeledValue(title: "Mode", value: entry.mode.rawValue.capitalized, theme: theme)
@@ -470,11 +469,11 @@ private struct LabeledValue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.skd(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
 
             Text(value)
-                .font(.system(size: 12, weight: .medium, design: monospaced ? .monospaced : .default))
+                .font(.skd(size: 12, weight: .medium, design: monospaced ? .monospaced : .default))
                 .foregroundStyle(theme.bodyText)
                 .textSelection(.enabled)
         }
@@ -489,12 +488,12 @@ private struct ActivityLogRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Text(entry.timestampLabel)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.skd(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
                 .frame(width: 78, alignment: .leading)
 
             Text(entry.message)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(.skd(size: 10, weight: .medium, design: .monospaced))
                 .foregroundStyle(theme.bodyText)
                 .textSelection(.enabled)
                 .lineLimit(4)
@@ -519,12 +518,12 @@ private struct FormatOptionRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(option.displayTitle)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.skd(size: 12, weight: .semibold))
                         .foregroundStyle(theme.bodyText)
                         .lineLimit(1)
 
                     Text(option.technicalSummary.isEmpty ? option.downloadSelector : option.technicalSummary)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.mutedText)
                         .lineLimit(1)
                 }
@@ -532,7 +531,7 @@ private struct FormatOptionRow: View {
                 Spacer()
 
                 Text(option.downloadSelector)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }

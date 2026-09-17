@@ -19,16 +19,40 @@ public struct DownloaderCommands: Commands {
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
 
-            Button("Refresh Binary Status") {
-                Task { await appState.refreshBinaryStatus() }
+            Button("Refresh Engine") {
+                Task { await appState.refreshEngineHealth() }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+
+            Button("Update yt-dlp") {
+                Task { await appState.installManagedTool(.ytDLP) }
+            }
+            .keyboardShortcut("u", modifiers: [.command, .shift])
 
             Divider()
 
             Button("Open Output Folder") {
                 appState.openOutputFolder()
             }
+        }
+
+        CommandGroup(after: .toolbar) {
+            Button("Increase Text Size") {
+                appState.stepTextScale(1)
+            }
+            .keyboardShortcut("+", modifiers: [.command])
+
+            Button("Decrease Text Size") {
+                appState.stepTextScale(-1)
+            }
+            .keyboardShortcut("-", modifiers: [.command])
+
+            Button("Default Text Size") {
+                appState.setTextScale(1.0)
+            }
+            .keyboardShortcut("0", modifiers: [.command])
+
+            Divider()
         }
     }
 }

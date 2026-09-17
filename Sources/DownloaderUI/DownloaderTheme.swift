@@ -233,11 +233,11 @@ struct DownloaderThemePreviewCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(preset.displayName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.skd(size: 14, weight: .semibold))
                         .foregroundStyle(theme.bodyText)
 
                     Text(preset.designReference)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.mutedText)
                 }
 
@@ -245,7 +245,7 @@ struct DownloaderThemePreviewCard: View {
 
                 if isSelected {
                     Text("ACTIVE")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.skd(size: 10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(Capsule(style: .continuous).fill(theme.tint.opacity(theme.isLight ? 0.18 : 0.24)))
@@ -259,7 +259,7 @@ struct DownloaderThemePreviewCard: View {
                 .overlay(alignment: .leading) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Queue Control")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.skd(size: 13, weight: .bold))
                             .foregroundStyle(theme.heroPrimaryText)
 
                         HStack(spacing: 8) {
@@ -272,7 +272,7 @@ struct DownloaderThemePreviewCard: View {
                 }
 
             Text(preset.summary)
-                .font(.system(size: 12, weight: .medium))
+                .font(.skd(size: 12, weight: .medium))
                 .foregroundStyle(theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -282,7 +282,7 @@ struct DownloaderThemePreviewCard: View {
 
     private func capsule(_ text: String, tint: Color) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.skd(size: 10, weight: .semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule(style: .continuous).fill(tint.opacity(theme.isLight ? 0.16 : 0.2)))
@@ -299,5 +299,19 @@ private extension Color {
             blue: Double(hex & 0xFF) / 255,
             opacity: opacity
         )
+    }
+}
+
+enum DownloaderTextScale {
+    /// Process-wide multiplier written by `DownloaderAppState` when preferences load or change.
+    /// Fonts read this instead of UserDefaults so layout passes never touch the defaults store.
+    nonisolated(unsafe) static var current: Double = 1.0
+}
+
+extension Font {
+    /// Every interface font goes through here so the Text Size preference scales the whole app.
+    /// Views re-evaluate when `DownloaderAppState.textScale` publishes, picking up the new multiplier.
+    static func skd(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        .system(size: size * DownloaderTextScale.current, weight: weight, design: design)
     }
 }

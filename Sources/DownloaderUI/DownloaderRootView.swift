@@ -17,6 +17,7 @@ struct DownloaderRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationSplitViewStyle(.balanced)
+        .controlSize(appState.textScale >= 1.3 ? .large : .regular)
         .tint(theme.tint)
         .background {
             DownloaderCanvasBackground(theme: theme)
@@ -107,13 +108,29 @@ struct DownloaderRootView: View {
         }
     }
 
+    private var ytDLPIsOutdated: Bool {
+        appState.engineHealth.outdatedTools.contains { $0.id == "yt-dlp" }
+    }
+
+    private var ytDLPTokenValue: String {
+        guard appState.isBinaryInstalled else {
+            return "unavailable"
+        }
+
+        return ytDLPIsOutdated ? "\(appState.binaryVersion) · update available" : appState.binaryVersion
+    }
+
+    private var statusBarShowsWarning: Bool {
+        !appState.isBinaryInstalled || appState.intakeFailure != nil || appState.queue.contains { $0.status.errorMessage != nil }
+    }
+
     private var statusBar: some View {
         HStack(spacing: 12) {
-            Image(systemName: appState.isBinaryInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(appState.isBinaryInstalled ? theme.success : theme.warning)
+            Image(systemName: statusBarShowsWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(statusBarShowsWarning ? theme.warning : theme.success)
 
             Text(appState.statusMessage)
-                .font(.system(size: 12, weight: .medium))
+                .font(.skd(size: 12, weight: .medium))
                 .foregroundStyle(theme.bodyText)
                 .lineLimit(1)
 
@@ -129,8 +146,8 @@ struct DownloaderRootView: View {
 
                 StatusBarToken(
                     title: "yt-dlp",
-                    value: appState.isBinaryInstalled ? appState.binaryVersion : "unavailable",
-                    tint: appState.isBinaryInstalled ? theme.tint : theme.warning,
+                    value: ytDLPTokenValue,
+                    tint: appState.isBinaryInstalled ? (ytDLPIsOutdated ? theme.warning : theme.tint) : theme.warning,
                     theme: theme
                 )
             }
@@ -159,11 +176,11 @@ private struct StatusBarToken: View {
                 .frame(width: 6, height: 6)
 
             Text(title)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.skd(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
 
             Text(value)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(.skd(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(theme.bodyText)
                 .lineLimit(1)
         }

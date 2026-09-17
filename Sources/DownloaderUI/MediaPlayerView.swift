@@ -171,11 +171,11 @@ struct MediaPlayerView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(asset.title)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.skd(size: 24, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
                     Text(asset.file.path)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.mutedText)
                         .textSelection(.enabled)
                 }
@@ -183,7 +183,7 @@ struct MediaPlayerView: View {
                 Spacer()
 
                 Text(asset.isMissing ? "MISSING" : "LIBRARY")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.bodyText)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -254,7 +254,7 @@ struct MediaPlayerView: View {
     private var playerCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Player")
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             if asset.isMissing {
@@ -276,7 +276,7 @@ struct MediaPlayerView: View {
     private var metadataCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Media")
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             LabeledMediaValue(title: "Mode", value: asset.mode.rawValue.capitalized, theme: theme)
@@ -296,11 +296,11 @@ struct MediaPlayerView: View {
     private func playerPlaceholder(_ message: String, showsFileActions: Bool) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "play.slash")
-                .font(.system(size: 34, weight: .semibold))
+                .font(.skd(size: 34, weight: .semibold))
                 .foregroundStyle(theme.mutedText)
 
             Text(message)
-                .font(.system(size: 13, weight: .medium))
+                .font(.skd(size: 13, weight: .medium))
                 .foregroundStyle(theme.mutedText)
                 .multilineTextAlignment(.center)
 
@@ -489,11 +489,11 @@ struct MediaLibraryEmptyView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(.system(size: 42, weight: .semibold))
+                .font(.skd(size: 42, weight: .semibold))
                 .foregroundStyle(theme.mutedText)
 
             Text("No saved media")
-                .font(.system(size: 18, weight: .bold))
+                .font(.skd(size: 18, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             Button {
@@ -522,11 +522,11 @@ private struct LabeledMediaValue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.skd(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
 
             Text(value)
-                .font(.system(size: 12, weight: .medium))
+                .font(.skd(size: 12, weight: .medium))
                 .foregroundStyle(theme.bodyText)
                 .textSelection(.enabled)
         }
