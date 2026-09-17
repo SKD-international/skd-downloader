@@ -428,12 +428,61 @@ func commandResultDefaultsToNotCancelled() {
 }
 
 @Test
-func homebrewBinaryPathsArePreferredBeforeSystemPaths() {
-    let paths = BinaryLocator.searchPaths(for: "yt-dlp")
+func managedToolsWinOverHomebrewAndLoginPathEntries() {
+    let home = URL(fileURLWithPath: "/Users/nono", isDirectory: true)
+    let directories = BinaryLocator.searchDirectories(
+        homeDirectory: home,
+        environmentPath: "/opt/homebrew/bin:/Users/nono/custom/bin::/usr/bin"
+    ).map(\.path)
 
-    #expect(paths.first == URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"))
-    #expect(paths.contains(URL(fileURLWithPath: "/usr/local/bin/yt-dlp")))
-    #expect(paths.last == URL(fileURLWithPath: "/usr/bin/yt-dlp"))
+    #expect(directories.first == ManagedToolchain.defaultBinDirectory.path)
+    #expect(directories[1] == "/opt/homebrew/bin")
+    #expect(directories.contains("/usr/local/bin"))
+    #expect(directories.contains("/Users/nono/.deno/bin"))
+    #expect(directories.last == "/Users/nono/custom/bin")
+    #expect(directories.filter { $0 == "/opt/homebrew/bin" }.count == 1)
+}
+
+@Test
+func runtimeArgumentsPointYTDLPAtFFmpegAndDeno() {
+    let args = YTDLPCommandBuilder.build(
+        url: "https://youtube.com/watch?v=abc123",
+        configuration: DownloadConfiguration(),
+        mode: .video,
+        formatOverride: nil,
+        qualityOverride: nil,
+        ffmpegDirectory: URL(fileURLWithPath: "/tools/ffmpeg-bin", isDirectory: true),
+        jsRuntimeDirectory: URL(fileURLWithPath: "/tools/bin", isDirectory: true)
+    )
+
+    #expect(args.contains("--ffmpeg-location"))
+    #expect(args.contains("/tools/ffmpeg-bin"))
+    #expect(args.contains("--js-runtimes"))
+    #expect(args.contains("deno:/tools/bin"))
+    #expect(!YTDLPCommandBuilder.runtimeArguments(ffmpegDirectory: nil, jsRuntimeDirectory: nil).contains("--js-runtimes"))
+}
+
+@Test
+func ytDLPHealthAnnotationFlagsOlderThanLatestAndStaleBuilds() throws {
+    let now = try #require(
+        Calendar(identifier: .gregorian).date(from: DateComponents(timeZone: .init(identifier: "UTC"), year: 2026, month: 9, day: 17))
+    )
+    let installed = EngineToolStatus(id: "yt-dlp", name: "yt-dlp", state: .installed, version: "2026.03.17", path: "/usr/local/bin/yt-dlp", required: true)
+
+    let behind = YTDLPEngine.annotatingYTDLP(installed, latest: "2026.08.19", now: now)
+    #expect(behind.state == .outdated)
+    #expect(behind.latestVersion == "2026.08.19")
+    #expect(behind.message.contains("2026.08.19"))
+
+    let offline = YTDLPEngine.annotatingYTDLP(installed, latest: nil, now: now)
+    #expect(offline.state == .outdated)
+    #expect(offline.message.contains("days old"))
+
+    let fresh = EngineToolStatus(id: "yt-dlp", name: "yt-dlp", state: .installed, version: "2026.08.19", path: "/usr/local/bin/yt-dlp", required: true)
+    #expect(YTDLPEngine.annotatingYTDLP(fresh, latest: "2026.08.19", now: now).state == .installed)
+
+    let missing = EngineToolStatus.missing(id: "yt-dlp", name: "yt-dlp", required: true)
+    #expect(YTDLPEngine.annotatingYTDLP(missing, latest: "2026.08.19", now: now).state == .missing)
 }
 
 @Test
@@ -457,15 +506,6 @@ func engineHealthReportRequiresCoreDownloadTools() {
             required: true
         ),
         .missing(id: "ffmpeg", name: "ffmpeg", required: true),
-        EngineToolStatus(
-            id: "brew",
-            name: "Homebrew",
-            state: .missing,
-            version: "Missing",
-            path: "",
-            required: false,
-            message: "Homebrew was not found on PATH."
-        ),
     ])
 
     #expect(!report.isReady)
@@ -473,8 +513,7 @@ func engineHealthReportRequiresCoreDownloadTools() {
     #expect(report.statusMessage == "Missing required tools: ffmpeg.")
     #expect(report.missingRequiredTools.map(\.id) == ["ffmpeg"])
     #expect(report.diagnosticsText.contains("yt-dlp: installed"))
-    #expect(report.diagnosticsText.contains("Install: brew install yt-dlp ffmpeg"))
-    #expect(report.diagnosticsText.contains("Update: brew update && brew upgrade yt-dlp ffmpeg"))
+    #expect(report.diagnosticsText.contains("ffmpeg install: brew install ffmpeg"))
 }
 
 @Test
@@ -508,7 +547,7 @@ func engineHealthReportIsReadyWhenRequiredToolsAreInstalled() {
 
     #expect(report.isReady)
     #expect(report.statusTitle == "Engine Ready")
-    #expect(report.statusMessage == "yt-dlp, ffmpeg, and ffprobe are available.")
+    #expect(report.statusMessage == "yt-dlp, Deno, ffmpeg, and ffprobe are available.")
     #expect(report.missingRequiredTools.isEmpty)
 }
 

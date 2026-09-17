@@ -13,7 +13,7 @@ public enum CookieBrowser: String, CaseIterable, Codable, Sendable {
     case safari
     case none
 
-    static func detectedDefault(
+    public static func detectedDefault(
         homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
         fileManager: FileManager = .default
     ) -> CookieBrowser? {

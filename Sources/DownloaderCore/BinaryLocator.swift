@@ -9,12 +9,32 @@ public enum BinaryLocator {
         locate("ffmpeg")?.deletingLastPathComponent()
     }
 
-    static func searchPaths(for name: String) -> [URL] {
-        [
-            URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
-            URL(fileURLWithPath: "/usr/local/bin/\(name)"),
-            URL(fileURLWithPath: "/usr/bin/\(name)"),
+    /// Directories searched in order. The app-managed tools win so an in-app update takes
+    /// effect immediately; then Homebrew, common per-user bins, MacPorts, the login PATH.
+    public static func searchDirectories(
+        homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        environmentPath: String? = ProcessInfo.processInfo.environment["PATH"]
+    ) -> [URL] {
+        var directories = [
+            ManagedToolchain.defaultBinDirectory,
+            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".local/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".deno/bin", isDirectory: true),
+            URL(fileURLWithPath: "/opt/local/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/bin", isDirectory: true),
         ]
+
+        for entry in (environmentPath ?? "").split(separator: ":") where !entry.isEmpty {
+            directories.append(URL(fileURLWithPath: String(entry), isDirectory: true))
+        }
+
+        var seen = Set<String>()
+        return directories.filter { seen.insert($0.standardizedFileURL.path).inserted }
+    }
+
+    static func searchPaths(for name: String) -> [URL] {
+        searchDirectories().map { $0.appendingPathComponent(name) }
     }
 
     private static func isExecutableFile(_ url: URL) -> Bool {

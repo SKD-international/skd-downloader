@@ -1,42 +1,12 @@
 # SKD Downloader Native Setup
 
-`SKD Downloader` depends on two command-line tools:
+`SKD Downloader` needs three command-line tools:
 
-- `yt-dlp`
-- `ffmpeg`
+- `yt-dlp` — installed and updated by the app itself
+- `deno` — JavaScript runtime YouTube now requires; installed by the app itself
+- `ffmpeg` (with `ffprobe`) — install with Homebrew
 
 ## Fast Path
-
-If Homebrew is already installed:
-
-```bash
-brew install yt-dlp ffmpeg
-```
-
-Then verify:
-
-```bash
-yt-dlp --version
-ffmpeg -version
-```
-
-## If Homebrew Is Missing
-
-Install Homebrew first:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-Then run:
-
-```bash
-brew install yt-dlp ffmpeg
-```
-
-## Homebrew Cask
-
-The native macOS app is distributed through the SKD tap:
 
 ```bash
 brew tap bonchaloo/tap
@@ -44,55 +14,65 @@ brew trust --cask bonchaloo/tap/skd-downloader
 brew install --cask skd-downloader
 ```
 
-The cask installs the Homebrew `yt-dlp` and `ffmpeg` formula dependencies. The native app resolves those Homebrew-managed tools through absolute `/opt/homebrew` and `/usr/local` paths so GUI launches work even when macOS starts the app with a minimal `PATH`.
+Open the app. The Engine panel on the Overview shows every tool with an
+**Install** or **Update** button. yt-dlp and Deno are downloaded from their
+official GitHub releases, verified against the published SHA-256 sums, and kept
+in `~/Library/Application Support/skd-downloader-native/tools/bin`. They take
+precedence over any Homebrew or `/usr/local/bin` copies, so an in-app update is
+always what the app runs.
 
-Current Homebrew refuses casks from third-party taps until they are trusted, which is
-why `brew trust --cask bonchaloo/tap/skd-downloader` runs before the install.
+`Downloads → Update yt-dlp` (⌘⇧U) refreshes yt-dlp at any time. The engine
+check flags a yt-dlp build that is behind the latest release or older than
+60 days, because YouTube changes break stale builds (typically `HTTP Error 403`).
 
-In Settings → Network, `Cookies Browser` can read Firefox, Chrome, or Safari cookies
-for sites that need a signed-in session. macOS may ask to let SKD Downloader access
-data from other apps; if cookies cannot be read, the download retries without them.
+Current Homebrew refuses casks from third-party taps until they are trusted,
+which is why `brew trust` runs before the install.
 
-If the project is shipping a deliberately private beta artifact, use the private
-cask mode from the release script and set `HOMEBREW_GITHUB_API_TOKEN` before
-installing. Public casks should not require a token just to audit or load.
+## ffmpeg
 
-The native cask supports macOS 14 Sonoma and newer, including macOS 15 Sequoia.
-Release artifacts are universal `arm64` + `x86_64` app bundles for Apple
-Silicon and Intel Macs.
+Apple Silicon: the cask installs the `ffmpeg` formula.
 
-## Intel Macs (Homebrew Tier 3)
+Intel Macs: Homebrew stopped shipping Intel bottles in September 2026, so the
+cask does not depend on `ffmpeg` there. Either keep an existing ffmpeg in
+`/usr/local/bin`, or run `brew install ffmpeg` and let it build from source.
+The app also looks in `~/.local/bin`, `/opt/local/bin` (MacPorts), and your
+login `PATH`.
 
-Homebrew stopped building bottles for macOS on Intel in September 2026, so the
-cask's `yt-dlp` and `ffmpeg` formula dependencies try to compile from source.
-On Intel Macs install the notarized app zip from the GitHub release directly and
-use the official standalone tools, which the app finds in `/usr/local/bin`:
+If Homebrew is missing entirely:
 
 ```bash
-curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
-curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip
-ditto -xk /tmp/deno.zip /usr/local/bin
-chmod +x /usr/local/bin/yt-dlp /usr/local/bin/deno
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install ffmpeg
 ```
 
-Verify each download against the release checksums (`SHA2-256SUMS` for yt-dlp,
-`.sha256sum` for Deno). YouTube needs a current `yt-dlp` plus the Deno JavaScript
-runtime; older builds fail with `HTTP Error 403`. Existing Homebrew `ffmpeg` keeps
-working.
+## Without Homebrew
 
-## What The App Expects
+Download `SKD.Downloader.Native-<version>-mac.zip` from the GitHub release,
+unzip, and move `SKD Downloader.app` to `/Applications`. The bundle is signed
+and notarized. Install yt-dlp and Deno from inside the app; provide ffmpeg
+yourself.
 
-- `yt-dlp` must be available through Homebrew
-- `ffmpeg` and `ffprobe` should be available through Homebrew for merge and probe workflows
-- the app writes config and history under:
+## Cookies
+
+In Settings → General → Network, `Cookies Browser` can read Firefox, Chrome, or
+Safari cookies for sites that need a signed-in session. macOS may ask to let
+SKD Downloader access data from other apps; if cookies cannot be read, the
+download retries without them. Failures that need a login offer a
+**Use Browser Cookies** button.
+
+## Text Size
+
+Settings → General → Accessibility → Text Size scales every label in the app
+from 100% to 175%. ⌘+ / ⌘− / ⌘0 change it from anywhere.
+
+## Where Things Live
 
 ```text
 ~/Library/Application Support/skd-downloader-native/
+  config.json  workbench.json  history.json  queue/  library/  tools/bin/
 ```
 
 ## Native App Verification
-
-Run the staged macOS bundle:
 
 ```bash
 cd /path/to/skd-downloader
@@ -104,8 +84,6 @@ Build the uploadable zip and release notes:
 ```bash
 ./script/release_native.sh
 ```
-
-If the app still shows `Binary Missing`, open Settings and use the setup section to confirm the detected binary path.
 
 ## Release And Tap Checks
 

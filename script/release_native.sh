@@ -30,13 +30,15 @@ update_cask_metadata() {
   local checksum="$1"
   local asset_id="${2:-}"
   local private_asset_cask="${SKD_RELEASE_PRIVATE_ASSET:-0}"
+  local tap_dir
+  tap_dir="$(brew --repository bonchaloo/tap 2>/dev/null || true)"
   local cask_paths=(
     "$ROOT_DIR/homebrew/skd-downloader.rb"
-    "/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb"
+    "${tap_dir:+$tap_dir/Casks/skd-downloader.rb}"
   )
 
   for cask_path in "${cask_paths[@]}"; do
-    if [[ -f "$cask_path" ]]; then
+    if [[ -n "$cask_path" && -f "$cask_path" ]]; then
       SKD_RELEASE_VERSION="$VERSION" \
         SKD_RELEASE_SHA="$checksum" \
         SKD_RELEASE_ASSET_ID="$asset_id" \

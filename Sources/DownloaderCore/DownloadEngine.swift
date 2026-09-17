@@ -171,6 +171,7 @@ public final class DownloadSettingsStore: @unchecked Sendable {
 
 public protocol YTDLPEngineClient: Sendable {
     func checkToolchain() async -> EngineHealthReport
+    func installManagedTool(_ tool: ManagedTool, progress: @escaping @Sendable (String) -> Void) async throws -> String
     func fetchInfo(url: String, configuration: DownloadConfiguration) async throws -> [VideoInfo]
     func fetchFormatOptions(url: String, configuration: DownloadConfiguration) async throws -> [YTDLPFormatOption]
     func startDownload(
@@ -185,8 +186,22 @@ public protocol YTDLPEngineClient: Sendable {
     ) async -> DownloadCommandResult
 }
 
+public extension YTDLPEngineClient {
+    func installManagedTool(_ tool: ManagedTool, progress: @escaping @Sendable (String) -> Void) async throws -> String {
+        throw ManagedToolchainError(message: "This engine cannot install tools.")
+    }
+}
+
 public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
-    public init() {}
+    private let toolchain: ManagedToolchain
+
+    public init(toolchain: ManagedToolchain = ManagedToolchain()) {
+        self.toolchain = toolchain
+    }
+
+    public func installManagedTool(_ tool: ManagedTool, progress: @escaping @Sendable (String) -> Void) async throws -> String {
+        try await toolchain.install(tool, progress: progress)
+    }
 
     public func checkInstallation() async -> BinaryStatus {
         let status = await checkTool(id: "yt-dlp", name: "yt-dlp", arguments: ["--version"], required: true)
@@ -199,11 +214,54 @@ public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
 
     public func checkToolchain() async -> EngineHealthReport {
         async let ytdlp = checkTool(id: "yt-dlp", name: "yt-dlp", arguments: ["--version"], required: true)
+        async let deno = checkTool(id: "deno", name: "Deno", arguments: ["--version"], required: true)
         async let ffmpeg = checkTool(id: "ffmpeg", name: "ffmpeg", arguments: ["-version"], required: true)
         async let ffprobe = checkTool(id: "ffprobe", name: "ffprobe", arguments: ["-version"], required: true)
-        async let brew = checkTool(id: "brew", name: "Homebrew", arguments: ["--version"], required: false)
+        async let latestYTDLP = try? toolchain.latestVersion(of: .ytDLP)
+        async let latestDeno = try? toolchain.latestVersion(of: .deno)
 
-        return await EngineHealthReport(tools: [ytdlp, ffmpeg, ffprobe, brew])
+        return await EngineHealthReport(tools: [
+            Self.annotatingYTDLP(ytdlp, latest: latestYTDLP),
+            Self.annotating(deno, latest: latestDeno, missingMessage: "Needed for YouTube. Install it with one click."),
+            Self.annotating(ffmpeg, latest: nil, missingMessage: "Install with Homebrew: brew install ffmpeg"),
+            Self.annotating(ffprobe, latest: nil, missingMessage: "Installed together with ffmpeg."),
+        ])
+    }
+
+    static func annotatingYTDLP(_ status: EngineToolStatus, latest: String?, now: Date = .now) -> EngineToolStatus {
+        guard status.isUsable else {
+            return annotating(status, latest: latest, missingMessage: "Needed for every download. Install it with one click.")
+        }
+
+        if let latest, YTDLPVersion.isOlder(status.version, than: latest) {
+            return EngineToolStatus(
+                id: status.id, name: status.name, state: .outdated, version: status.version, path: status.path,
+                required: status.required, message: "Update available: \(latest). YouTube breaks often on old builds.",
+                latestVersion: latest
+            )
+        }
+
+        if YTDLPVersion.isStale(status.version, now: now) {
+            let age = YTDLPVersion.ageInDays(status.version, now: now).map { "\($0) days old" } ?? "of unknown age"
+            return EngineToolStatus(
+                id: status.id, name: status.name, state: .outdated, version: status.version, path: status.path,
+                required: status.required, message: "This build is \(age). YouTube breaks often on old builds.",
+                latestVersion: latest
+            )
+        }
+
+        return EngineToolStatus(
+            id: status.id, name: status.name, state: status.state, version: status.version, path: status.path,
+            required: status.required, message: status.message, latestVersion: latest
+        )
+    }
+
+    private static func annotating(_ status: EngineToolStatus, latest: String?, missingMessage: String) -> EngineToolStatus {
+        EngineToolStatus(
+            id: status.id, name: status.name, state: status.state, version: status.version, path: status.path,
+            required: status.required, message: status.state == .missing ? missingMessage : status.message,
+            latestVersion: latest
+        )
     }
 
     public func fetchInfo(url: String, configuration: DownloadConfiguration) async throws -> [VideoInfo] {
@@ -397,17 +455,21 @@ public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
     }
 
     private static func infoArguments(url: String, configuration: DownloadConfiguration) -> [String] {
-        var arguments = ["--dump-json", "--no-warnings", "--flat-playlist"]
-        arguments.insert(contentsOf: YTDLPCommandBuilder.cookieArguments(url: url, configuration: configuration), at: 0)
-        arguments.append(url)
-        return arguments
+        metadataArguments(["--dump-json", "--no-warnings", "--flat-playlist"], url: url, configuration: configuration)
     }
 
     private static func formatArguments(url: String, configuration: DownloadConfiguration) -> [String] {
-        var arguments = ["--dump-json", "--no-warnings", "--no-playlist"]
-        arguments.insert(contentsOf: YTDLPCommandBuilder.cookieArguments(url: url, configuration: configuration), at: 0)
-        arguments.append(url)
-        return arguments
+        metadataArguments(["--dump-json", "--no-warnings", "--no-playlist"], url: url, configuration: configuration)
+    }
+
+    private static func metadataArguments(_ base: [String], url: String, configuration: DownloadConfiguration) -> [String] {
+        YTDLPCommandBuilder.cookieArguments(url: url, configuration: configuration)
+            + YTDLPCommandBuilder.runtimeArguments(
+                ffmpegDirectory: BinaryLocator.ffmpegDirectory(),
+                jsRuntimeDirectory: BinaryLocator.locate("deno")?.deletingLastPathComponent()
+            )
+            + base
+            + [url]
     }
 
     private static func errorSummary(from output: String) -> String {
@@ -504,13 +566,11 @@ public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
 
     private static func processEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        let existingPath = environment["PATH"] ?? ""
-        let requiredPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
-        let pathParts = (requiredPaths + existingPath.split(separator: ":").map(String.init))
-            .reduce(into: [String]()) { parts, path in
-                guard !path.isEmpty, !parts.contains(path) else { return }
-                parts.append(path)
-            }
+        let searchPaths = BinaryLocator.searchDirectories().map(\.path) + ["/bin", "/usr/sbin", "/sbin"]
+        let pathParts = searchPaths.reduce(into: [String]()) { parts, path in
+            guard !parts.contains(path) else { return }
+            parts.append(path)
+        }
 
         environment["PATH"] = pathParts.joined(separator: ":")
         return environment

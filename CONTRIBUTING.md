@@ -9,7 +9,7 @@ Thanks for helping improve SKD Downloader.
 ## Local Setup
 
 ```bash
-brew install yt-dlp ffmpeg
+brew install ffmpeg
 swift test
 ```
 
@@ -43,7 +43,7 @@ brew install --cask --dry-run skd-downloader
 ## Release Changes
 
 Release scripts may touch the local Homebrew tap if it exists at
-`/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap`. Review that diff
+`$(brew --repository bonchaloo/tap)`. Review that diff
 before committing or pushing tap updates.
 
 Private beta casks are explicit. Use `SKD_RELEASE_PRIVATE_ASSET=1` only when a

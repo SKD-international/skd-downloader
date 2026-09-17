@@ -56,7 +56,7 @@ brew install --cask --dry-run skd-downloader
 The release script updates:
 
 - `homebrew/skd-downloader.rb`
-- `/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb`, when that local tap exists
+- `$(brew --repository bonchaloo/tap)/Casks/skd-downloader.rb`, when that local tap exists
 
 The public cask should look like:
 
@@ -96,8 +96,8 @@ use that as the default public install path.
 Inspect the tap before committing:
 
 ```bash
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap status --short --branch
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap diff -- Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) status --short --branch
+git -C $(brew --repository bonchaloo/tap) diff -- Casks/skd-downloader.rb
 ```
 
 Commit and push only when the release artifact, checksum, and cask audit are
@@ -109,8 +109,8 @@ To return the cask to an earlier release, restore the older `version`, `sha256`,
 and `url` from tap history:
 
 ```bash
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap log -- Casks/skd-downloader.rb
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap show <commit>:Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) log -- Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) show <commit>:Casks/skd-downloader.rb
 ```
 
 Then reinstall:
