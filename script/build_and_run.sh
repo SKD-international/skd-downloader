@@ -71,7 +71,10 @@ build_slice() {
   esac
 
   echo "Building $PROCESS_NAME for $arch ($BUILD_CONFIGURATION)..." >&2
-  swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --product "$PROCESS_NAME" >&2
+  if ! swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --product "$PROCESS_NAME" >&2; then
+    echo "swift build failed for $arch" >&2
+    exit 1
+  fi
   bin_path="$(swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --show-bin-path)"
 
   if [[ ! -x "$bin_path/$PROCESS_NAME" ]]; then
