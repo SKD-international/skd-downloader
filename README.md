@@ -17,8 +17,9 @@ For a simple native Mac walkthrough, see the [large-print Mac guide](docs/native
 - **Subtitles** — Download and embed subtitles
 - **Download history** — Searchable log of past downloads
 - **Native media library** — Browse, filter, and play downloaded media on macOS
+- **Self-updating engine** — One-click yt-dlp and Deno install/update from official releases; clear fixes for 403, sign-in, and geo errors
+- **Large text** — Text Size up to 175% for low-vision use
 - **Dark theme** — Premium dark cinematic UI
-- **Legacy cross-platform source** — Older Mac/Windows source remains available for developers
 
 ## Install
 
@@ -47,42 +48,23 @@ Native macOS app:
 ```bash
 git clone https://github.com/SKD-international/skd-downloader.git
 cd skd-downloader
-brew install yt-dlp ffmpeg
+brew install ffmpeg
 swift test
-npm run native:verify
-```
-
-Older cross-platform app source:
-
-```bash
-git clone https://github.com/SKD-international/skd-downloader.git
-cd skd-downloader
-npm install
-npm start
+./script/build_and_run.sh --verify
 ```
 
 ### Prerequisites
 
-- Homebrew cask installs [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org/) automatically.
-- Source builds should install them first: `brew install yt-dlp ffmpeg`
+- The app installs and updates [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://deno.com) itself from their official releases (SHA-256 verified).
+- [ffmpeg](https://ffmpeg.org/) comes from Homebrew (`brew install ffmpeg`); the cask installs it on Apple Silicon. See [SETUP.md](SETUP.md) for Intel Macs.
 
 ## Build
 
 Native macOS:
 
 ```bash
-npm run native:build
-npm run native:package
-```
-
-Older cross-platform build:
-
-```bash
-# Mac
-npm run dist:mac
-
-# Windows
-npm run dist:win
+./script/build_and_run.sh --build
+./script/build_and_run.sh --package
 ```
 
 ## Native macOS Release
@@ -90,17 +72,17 @@ npm run dist:win
 The Swift native app is packaged separately for the Homebrew cask:
 
 ```bash
-npm run native:release
+./script/release_native.sh
 ```
 
-This runs the Node and Swift test suites, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
+This runs the Swift test suite, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The app manages yt-dlp and Deno itself; ffmpeg comes from Homebrew.
 
 To upload the native artifact to GitHub:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:notary:preflight
-npm run native:release:upload
+./script/release_native.sh --preflight
+./script/release_native.sh --notarize --upload
 brew audit --cask --strict skd-downloader
 ```
 
@@ -111,7 +93,7 @@ terminal so macOS can prompt securely for the app-specific Apple ID password:
 export SKD_NOTARY_PROFILE=<notarytool-keychain-profile>
 export SKD_NOTARY_APPLE_ID=<apple-id>
 export SKD_NOTARY_TEAM_ID=<developer-team-id>
-npm run native:notary:setup
+./script/release_native.sh --setup-profile
 ```
 
 Private beta release assets can still be published when the repository or asset
@@ -119,7 +101,7 @@ must remain private:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-SKD_RELEASE_PRIVATE_ASSET=1 npm run native:release:upload
+SKD_RELEASE_PRIVATE_ASSET=1 ./script/release_native.sh --notarize --upload
 ```
 
 See `docs/homebrew-release.md` for the full upload, tap, audit, and rollback

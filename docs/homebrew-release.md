@@ -1,8 +1,6 @@
 # Native Homebrew Release Workflow
 
-This workflow is for the native Swift macOS app. The old Electron app still has
-its own `npm start`, `dist:mac`, and `dist:win` path, but it is not the current
-Homebrew artifact.
+This workflow is for the native Swift macOS app.
 
 ## Recommendation
 
@@ -34,7 +32,7 @@ Validate the notarization profile before a release:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:notary:preflight
+./script/release_native.sh --preflight
 ```
 
 Create the profile if it is missing:
@@ -43,14 +41,14 @@ Create the profile if it is missing:
 export SKD_NOTARY_PROFILE=skd-downloader-notary
 export SKD_NOTARY_APPLE_ID=<apple-id>
 export SKD_NOTARY_TEAM_ID=<developer-team-id>
-npm run native:notary:setup
+./script/release_native.sh --setup-profile
 ```
 
 ## Public Release
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:release:upload
+./script/release_native.sh --notarize --upload
 brew audit --cask --strict skd-downloader
 brew install --cask --dry-run skd-downloader
 ```
@@ -58,7 +56,7 @@ brew install --cask --dry-run skd-downloader
 The release script updates:
 
 - `homebrew/skd-downloader.rb`
-- `/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb`, when that local tap exists
+- `$(brew --repository bonchaloo/tap)/Casks/skd-downloader.rb`, when that local tap exists
 
 The public cask should look like:
 
@@ -78,7 +76,7 @@ Use this only when the GitHub release asset intentionally remains private:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-SKD_RELEASE_PRIVATE_ASSET=1 npm run native:release:upload
+SKD_RELEASE_PRIVATE_ASSET=1 ./script/release_native.sh --notarize --upload
 ```
 
 Users of the private cask need a token:
@@ -98,8 +96,8 @@ use that as the default public install path.
 Inspect the tap before committing:
 
 ```bash
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap status --short --branch
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap diff -- Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) status --short --branch
+git -C $(brew --repository bonchaloo/tap) diff -- Casks/skd-downloader.rb
 ```
 
 Commit and push only when the release artifact, checksum, and cask audit are
@@ -111,8 +109,8 @@ To return the cask to an earlier release, restore the older `version`, `sha256`,
 and `url` from tap history:
 
 ```bash
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap log -- Casks/skd-downloader.rb
-git -C /usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap show <commit>:Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) log -- Casks/skd-downloader.rb
+git -C $(brew --repository bonchaloo/tap) show <commit>:Casks/skd-downloader.rb
 ```
 
 Then reinstall:
@@ -127,7 +125,6 @@ brew install --cask skd-downloader
 Before calling a Homebrew release done, run:
 
 ```bash
-npm test
 swift test
 bash -n script/build_and_run.sh script/release_native.sh
 brew audit --cask --strict skd-downloader

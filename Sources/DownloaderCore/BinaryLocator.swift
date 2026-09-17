@@ -9,37 +9,32 @@ public enum BinaryLocator {
         locate("ffmpeg")?.deletingLastPathComponent()
     }
 
-    static func searchPaths(
-        for name: String,
-        bundleResourceURL: URL? = Bundle.main.resourceURL,
-        repositoryRoot: URL = repositoryRoot(),
-        includeDevelopmentCandidates: Bool = shouldIncludeDevelopmentCandidates()
+    /// Directories searched in order. The app-managed tools win so an in-app update takes
+    /// effect immediately; then Homebrew, common per-user bins, MacPorts, the login PATH.
+    public static func searchDirectories(
+        homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        environmentPath: String? = ProcessInfo.processInfo.environment["PATH"]
     ) -> [URL] {
-        var candidates: [URL] = []
+        var directories = [
+            ManagedToolchain.defaultBinDirectory,
+            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".local/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".deno/bin", isDirectory: true),
+            URL(fileURLWithPath: "/opt/local/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/bin", isDirectory: true),
+        ]
 
-        if name == "yt-dlp" {
-            candidates.append(contentsOf: [
-                URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"),
-                URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
-                URL(fileURLWithPath: "/usr/bin/yt-dlp"),
-            ])
-        } else {
-            candidates.append(contentsOf: [
-                URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
-                URL(fileURLWithPath: "/usr/local/bin/\(name)"),
-                URL(fileURLWithPath: "/usr/bin/\(name)"),
-            ])
+        for entry in (environmentPath ?? "").split(separator: ":") where !entry.isEmpty {
+            directories.append(URL(fileURLWithPath: String(entry), isDirectory: true))
         }
 
-        if includeDevelopmentCandidates {
-            if let bundleURL = bundleResourceURL {
-                candidates.append(bundleURL.appendingPathComponent("bin/\(name)"))
-            }
+        var seen = Set<String>()
+        return directories.filter { seen.insert($0.standardizedFileURL.path).inserted }
+    }
 
-            candidates.append(repositoryRoot.appendingPathComponent("bin/\(name)"))
-        }
-
-        return candidates
+    static func searchPaths(for name: String) -> [URL] {
+        searchDirectories().map { $0.appendingPathComponent(name) }
     }
 
     private static func isExecutableFile(_ url: URL) -> Bool {
@@ -49,16 +44,5 @@ public enum BinaryLocator {
         }
 
         return FileManager.default.isExecutableFile(atPath: url.path)
-    }
-
-    private static func repositoryRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // DownloaderCore
-            .deletingLastPathComponent() // Sources
-            .deletingLastPathComponent() // repo root
-    }
-
-    private static func shouldIncludeDevelopmentCandidates() -> Bool {
-        Bundle.main.bundleURL.pathExtension != "app"
     }
 }

@@ -172,6 +172,10 @@ public final class DownloaderAppState: ObservableObject {
     @Published private(set) var binaryPath = ""
     @Published private(set) var engineHealth = EngineHealthReport(tools: [])
     @Published private(set) var isCheckingEngineHealth = false
+    @Published private(set) var installingTool: ManagedTool?
+    @Published private(set) var toolchainMessage: String?
+    @Published private(set) var intakeFailure: DownloadFailure?
+    @Published private(set) var textScale: Double
     @Published private(set) var themePreset: DownloaderThemePreset
     @Published var statusMessage = "Ready"
     @Published var isFetching = false
@@ -241,6 +245,8 @@ public final class DownloaderAppState: ObservableObject {
         self.showHistoryInSidebar = DownloaderAppPreferences.showHistoryInSidebar(defaults)
         self.recentHistoryLimit = DownloaderAppPreferences.recentHistoryLimit(defaults)
         self.themePreset = DownloaderAppPreferences.theme(defaults)
+        self.textScale = DownloaderAppPreferences.textScale(defaults)
+        DownloaderTextScale.current = textScale
         if let mediaLibraryLoadError {
             self.statusMessage = mediaLibraryLoadError
         }
@@ -414,6 +420,89 @@ public final class DownloaderAppState: ObservableObject {
         isCheckingEngineHealth = false
     }
 
+    /// Installs or updates a tool from its official release, then re-checks the engine.
+    func installManagedTool(_ tool: ManagedTool) async {
+        guard installingTool == nil else {
+            return
+        }
+
+        installingTool = tool
+        toolchainMessage = "Preparing \(tool.displayName) install…"
+        statusMessage = toolchainMessage ?? statusMessage
+        defer {
+            installingTool = nil
+        }
+
+        do {
+            let version = try await engine.installManagedTool(tool) { [weak self] line in
+                Task { @MainActor in
+                    self?.toolchainMessage = line
+                }
+            }
+            toolchainMessage = nil
+            statusMessage = "\(tool.displayName) \(version) installed."
+        } catch {
+            toolchainMessage = nil
+            statusMessage = "\(tool.displayName) install failed: \(error.localizedDescription)"
+            return
+        }
+
+        await refreshEngineHealth()
+        statusMessage = "\(tool.displayName) ready. \(engineHealth.statusMessage)"
+    }
+
+    /// Human reading of a failed queue item, or nil when it has not failed.
+    func failure(for item: DownloadQueueItem) -> DownloadFailure? {
+        item.status.errorMessage.map(DownloadFailure.classify)
+    }
+
+    func dismissIntakeFailure() {
+        intakeFailure = nil
+    }
+
+    /// Runs the fix a failure offers; for queue items the item is retried afterwards.
+    func applyRemedy(_ remedy: DownloadFailure.Remedy, for itemID: UUID? = nil) async {
+        switch remedy {
+        case .updateYTDLP:
+            await installManagedTool(.ytDLP)
+        case .installDeno:
+            await installManagedTool(.deno)
+        case .installFFmpeg:
+            copyEngineInstallCommand()
+            return
+        case .useBrowserCookies:
+            configuration.cookiesBrowser = CookieBrowser.detectedDefault() ?? .safari
+            configuration.cookiesBrowserConfigured = true
+            statusMessage = "Using \(configuration.cookiesBrowser.rawValue.capitalized) cookies for sign-in protected sites."
+        case .checkURL, .none:
+            return
+        }
+
+        guard engineHealth.isReady else {
+            return
+        }
+
+        if let itemID {
+            retry(itemID)
+            await startQueue()
+        } else {
+            intakeFailure = nil
+            await addURL()
+        }
+    }
+
+    func setTextScale(_ scale: Double) {
+        DownloaderAppPreferences.setTextScale(scale, defaults)
+    }
+
+    func stepTextScale(_ direction: Int) {
+        let steps = DownloaderAppPreferences.textScaleSteps
+        let index = steps.firstIndex(of: textScale) ?? 0
+        let next = min(max(index + direction, 0), steps.count - 1)
+        setTextScale(steps[next])
+        statusMessage = "Text size \(Int(steps[next] * 100))%."
+    }
+
     func copyEngineDiagnostics() {
         copyToClipboard(engineHealth.diagnosticsText, label: "engine diagnostics")
     }
@@ -520,10 +609,13 @@ public final class DownloaderAppState: ObservableObject {
             if let first = items.first {
                 selection = .queue(first.id)
             }
+            intakeFailure = nil
             statusMessage = "Added \(items.count) item(s) to the queue."
             urlInput = ""
         } catch {
-            statusMessage = error.localizedDescription
+            let failure = DownloadFailure.classify(error.localizedDescription)
+            intakeFailure = failure
+            statusMessage = failure.title
         }
     }
 
@@ -762,7 +854,7 @@ public final class DownloaderAppState: ObservableObject {
         } else {
             queue[refreshedIndex].status = .failed(result.output)
             appendActivityLog("Process failed with exit code \(result.exitCode).", for: itemID)
-            statusMessage = result.output.isEmpty ? "Download failed." : result.output
+            statusMessage = DownloadFailure.classify(result.output).title
         }
         persistQueueSnapshot()
     }
@@ -1087,6 +1179,8 @@ public final class DownloaderAppState: ObservableObject {
         showHistoryInSidebar = DownloaderAppPreferences.showHistoryInSidebar(defaults)
         recentHistoryLimit = DownloaderAppPreferences.recentHistoryLimit(defaults)
         themePreset = DownloaderAppPreferences.theme(defaults)
+        textScale = DownloaderAppPreferences.textScale(defaults)
+        DownloaderTextScale.current = textScale
         objectWillChange.send()
     }
 

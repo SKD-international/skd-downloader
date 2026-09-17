@@ -42,7 +42,6 @@ git rev-list --all | xargs git grep -nI -E \
 Then verify:
 
 ```bash
-npm test
 swift test
 bash -n script/build_and_run.sh script/release_native.sh
 brew audit --cask --strict skd-downloader

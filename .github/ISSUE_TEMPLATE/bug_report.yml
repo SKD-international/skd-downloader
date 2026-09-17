@@ -48,7 +48,6 @@ body:
       label: App lane
       options:
         - Native macOS Homebrew app
-        - Legacy Electron app
         - Source build
         - Not sure
   - type: input

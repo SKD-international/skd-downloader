@@ -110,11 +110,11 @@ struct DownloaderOverviewView: View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("SKD Downloader")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.skd(size: 20, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
                 Text(appState.isBinaryInstalled ? appState.binaryPath : "Install yt-dlp and ffmpeg to enable downloads.")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.skd(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }
@@ -156,47 +156,71 @@ struct DownloaderOverviewView: View {
     private var engineHealthSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Label(appState.engineHealth.statusTitle, systemImage: appState.engineHealth.isReady ? "checkmark.seal.fill" : "wrench.and.screwdriver.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(appState.engineHealth.isReady ? theme.success : theme.warning)
+                Label(appState.engineHealth.statusTitle, systemImage: engineSymbol)
+                    .font(.skd(size: 14, weight: .bold))
+                    .foregroundStyle(engineTint)
 
                 Spacer()
 
-                Text(appState.themePreset.displayName)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(theme.mutedText)
-            }
-
-            Text(appState.engineHealth.statusMessage)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.mutedText)
-                .lineLimit(2)
-
-            VStack(spacing: 8) {
-                ForEach(appState.engineHealth.tools) { tool in
-                    EngineToolPill(tool: tool, theme: theme)
-                }
-            }
-
-            HStack(spacing: 8) {
                 Button {
                     Task { await appState.refreshEngineHealth() }
                 } label: {
-                    Label(appState.isCheckingEngineHealth ? "Checking" : "Refresh", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .disabled(appState.isCheckingEngineHealth)
-
-                Button {
-                    appState.copyEngineDiagnostics()
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
+                    Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
+                .disabled(appState.isCheckingEngineHealth || appState.installingTool != nil)
+                .help("Refresh engine health")
+                .accessibilityLabel("Refresh engine health")
             }
+
+            Text(appState.engineHealth.statusMessage)
+                .font(.skd(size: 12, weight: .medium))
+                .foregroundStyle(theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 8) {
+                ForEach(appState.engineHealth.tools) { tool in
+                    EngineToolRow(tool: tool, appState: appState, theme: theme)
+                }
+            }
+
+            if let message = appState.toolchainMessage {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Text(message)
+                        .font(.skd(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(theme.mutedText)
+                        .lineLimit(2)
+                }
+            }
+
+            Button {
+                appState.copyEngineDiagnostics()
+            } label: {
+                Label("Copy Diagnostics", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
         }
         .padding(16)
         .downloaderPanel(theme: theme, radius: 14)
+    }
+
+    private var engineSymbol: String {
+        if !appState.engineHealth.isReady {
+            return "wrench.and.screwdriver.fill"
+        }
+
+        return appState.engineHealth.outdatedTools.isEmpty ? "checkmark.seal.fill" : "arrow.down.circle.fill"
+    }
+
+    private var engineTint: Color {
+        if !appState.engineHealth.isReady {
+            return theme.warning
+        }
+
+        return appState.engineHealth.outdatedTools.isEmpty ? theme.success : theme.tint
     }
 
     private var composerSection: some View {
@@ -204,11 +228,11 @@ struct DownloaderOverviewView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Add URLs", systemImage: "link.badge.plus")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.skd(size: 15, weight: .bold))
                         .foregroundStyle(theme.bodyText)
 
                     Text("Paste links or notes. SKD extracts supported URLs before queueing.")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.skd(size: 12, weight: .medium))
                         .foregroundStyle(theme.mutedText)
                 }
 
@@ -231,7 +255,7 @@ struct DownloaderOverviewView: View {
             }
 
             TextEditor(text: $appState.urlInput)
-                .font(.system(size: 14, weight: .medium))
+                .font(.skd(size: 14, weight: .medium))
                 .frame(minHeight: 112)
                 .scrollContentBackground(.hidden)
                 .padding(10)
@@ -247,6 +271,14 @@ struct DownloaderOverviewView: View {
                     handleDroppedURLProviders(providers)
                 }
 
+            if let failure = appState.intakeFailure {
+                FailureCallout(failure: failure, theme: theme, isBusy: appState.installingTool != nil) {
+                    Task { await appState.applyRemedy(failure.remedy) }
+                } dismiss: {
+                    appState.dismissIntakeFailure()
+                }
+            }
+
             downloadOptionControls
 
             SmartModeSummaryRail(
@@ -257,7 +289,7 @@ struct DownloaderOverviewView: View {
 
             HStack(spacing: 10) {
                 Text(formatHint)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.skd(size: 11, weight: .medium))
                     .foregroundStyle(theme.mutedText)
 
                 Spacer()
@@ -394,13 +426,13 @@ struct DownloaderOverviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Queue")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.skd(size: 14, weight: .bold))
                     .foregroundStyle(theme.bodyText)
 
                 Spacer()
 
                 Text("\(appState.queueSummary.total) jobs")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
             }
 
@@ -409,7 +441,7 @@ struct DownloaderOverviewView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(appState.queue.prefix(7)) { item in
-                        PreviewQueueRow(item: item, theme: theme) {
+                        PreviewQueueRow(item: item, failure: appState.failure(for: item), theme: theme) {
                             appState.selection = .queue(item.id)
                         } stop: {
                             appState.stopDownload(item.id)
@@ -438,7 +470,7 @@ struct DownloaderOverviewView: View {
     private func previewColumn<Content: View>(title: String, emptyState: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.skd(size: 14, weight: .bold))
                 .foregroundStyle(theme.bodyText)
 
             if title == "Queue Preview", appState.queue.isEmpty {
@@ -458,7 +490,7 @@ struct DownloaderOverviewView: View {
 
     private func previewPlaceholder(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .medium))
+            .font(.skd(size: 12, weight: .medium))
             .foregroundStyle(theme.mutedText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
@@ -557,11 +589,11 @@ private struct SmartModeSummaryRail: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(preset.displayName.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(theme.tint)
 
                 Text(preset.summary)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.skd(size: 12, weight: .medium))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(2)
             }
@@ -599,10 +631,10 @@ private struct SmartModeSignalPill: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: symbol)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.skd(size: 10, weight: .semibold))
 
             Text(title)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.skd(size: 10, weight: .bold, design: .monospaced))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
@@ -621,11 +653,11 @@ private struct CommandStatusChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(.skd(size: 9, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.mutedText)
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.skd(size: 11, weight: .semibold))
                 .foregroundStyle(theme.bodyText)
                 .lineLimit(1)
         }
@@ -652,18 +684,18 @@ private struct QueueRailSegment: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.skd(size: 12, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 18)
 
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.skd(size: 11, weight: .semibold))
                 .foregroundStyle(theme.mutedText)
 
             Spacer(minLength: 6)
 
             Text(value)
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(.skd(size: 14, weight: .bold, design: .monospaced))
                 .foregroundStyle(theme.bodyText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -676,25 +708,39 @@ private struct QueueRailSegment: View {
     }
 }
 
-private struct EngineToolPill: View {
+private struct EngineToolRow: View {
     let tool: EngineToolStatus
+    @ObservedObject var appState: DownloaderAppState
     let theme: DownloaderThemeStyle
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: symbol)
                 .foregroundStyle(tint)
+                .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(tool.name)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.skd(size: 11, weight: .bold))
                     .foregroundStyle(theme.bodyText)
                     .lineLimit(1)
 
                 Text(detail)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.skd(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
+                    .help(tool.message.isEmpty ? tool.path : tool.message)
+            }
+
+            Spacer(minLength: 6)
+
+            if let action {
+                Button(action.title) {
+                    Task { await action.run() }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(appState.installingTool != nil)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -708,23 +754,52 @@ private struct EngineToolPill: View {
                         .stroke(tint.opacity(theme.isLight ? 0.12 : 0.16), lineWidth: 1)
                 }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tool.name): \(detail)")
     }
 
     private var detail: String {
         switch tool.state {
         case .installed:
             return tool.compactVersion
+        case .outdated:
+            return tool.latestVersion.map { "\(tool.compactVersion) → \($0)" } ?? "\(tool.compactVersion) (old)"
         case .missing:
-            return "Missing"
+            return tool.message.isEmpty ? "Missing" : tool.message
         case .failed:
-            return "Failed"
+            return tool.message.isEmpty ? "Failed to run" : tool.message
         }
+    }
+
+    private var action: (title: String, run: @MainActor () async -> Void)? {
+        if appState.installingTool == tool.managedTool, appState.installingTool != nil {
+            return ("Installing…", {})
+        }
+
+        if let managed = tool.managedTool {
+            switch tool.state {
+            case .installed:
+                return nil
+            case .outdated:
+                return ("Update", { await appState.installManagedTool(managed) })
+            case .missing, .failed:
+                return ("Install", { await appState.installManagedTool(managed) })
+            }
+        }
+
+        if tool.id == "ffmpeg", !tool.isUsable {
+            return ("Copy Command", { appState.copyEngineInstallCommand() })
+        }
+
+        return nil
     }
 
     private var symbol: String {
         switch tool.state {
         case .installed:
             return "checkmark.circle.fill"
+        case .outdated:
+            return "arrow.down.circle.fill"
         case .missing:
             return tool.required ? "exclamationmark.triangle.fill" : "minus.circle"
         case .failed:
@@ -736,6 +811,8 @@ private struct EngineToolPill: View {
         switch tool.state {
         case .installed:
             return theme.success
+        case .outdated:
+            return theme.tint
         case .missing:
             return tool.required ? theme.warning : theme.mutedText
         case .failed:
@@ -744,8 +821,70 @@ private struct EngineToolPill: View {
     }
 }
 
+struct FailureCallout: View {
+    let failure: DownloadFailure
+    let theme: DownloaderThemeStyle
+    var isBusy = false
+    let applyRemedy: () -> Void
+    var dismiss: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(theme.danger)
+
+                Text(failure.title)
+                    .font(.skd(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.bodyText)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                if let dismiss {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Dismiss")
+                }
+            }
+
+            if !failure.detail.isEmpty, failure.detail != failure.title {
+                Text(failure.detail)
+                    .font(.skd(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.mutedText)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+            }
+
+            if let actionTitle = failure.remedy.actionTitle {
+                Button(isBusy ? "Working…" : actionTitle) {
+                    applyRemedy()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(isBusy)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.danger.opacity(theme.isLight ? 0.07 : 0.12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(theme.danger.opacity(0.3), lineWidth: 1)
+                }
+        }
+    }
+}
+
 private struct PreviewQueueRow: View {
     let item: DownloadQueueItem
+    let failure: DownloadFailure?
     let theme: DownloaderThemeStyle
     let select: () -> Void
     let stop: () -> Void
@@ -757,13 +896,13 @@ private struct PreviewQueueRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.skd(size: 13, weight: .semibold))
                     .foregroundStyle(theme.bodyText)
                     .lineLimit(1)
 
-                Text("\(item.status.title) • \(Int(item.progress))% • \(item.speed)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.mutedText)
+                Text(failure?.title ?? "\(item.status.title) • \(Int(item.progress))% • \(item.speed)")
+                    .font(.skd(size: 11, weight: .medium))
+                    .foregroundStyle(failure == nil ? theme.mutedText : theme.danger)
                     .lineLimit(1)
             }
 
@@ -783,7 +922,7 @@ private struct PreviewQueueRow: View {
                 select()
             } label: {
                 Text(item.status.title.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.skd(size: 10, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(Capsule(style: .continuous).fill(theme.statusFill(for: item.status)))
@@ -807,12 +946,12 @@ private struct PreviewHistoryRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.skd(size: 13, weight: .semibold))
                     .foregroundStyle(theme.bodyText)
                     .lineLimit(1)
 
                 Text(entry.downloadedAt.formatted(date: .numeric, time: .shortened))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.skd(size: 11, weight: .medium))
                     .foregroundStyle(theme.mutedText)
                     .lineLimit(1)
             }

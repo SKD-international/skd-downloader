@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="${SKD_GITHUB_REPO:-SKD-international/skd-downloader}"
-VERSION="$(cd "$ROOT_DIR" && node -p "require('./package.json').version")"
+VERSION="$(tr -d '[:space:]' <"$ROOT_DIR/VERSION")"
 TAG="v$VERSION"
 ASSET_NAME="SKD.Downloader.Native-$VERSION-mac.zip"
 ASSET_PATH="$ROOT_DIR/dist/native/$ASSET_NAME"
@@ -30,13 +30,15 @@ update_cask_metadata() {
   local checksum="$1"
   local asset_id="${2:-}"
   local private_asset_cask="${SKD_RELEASE_PRIVATE_ASSET:-0}"
+  local tap_dir
+  tap_dir="$(brew --repository bonchaloo/tap 2>/dev/null || true)"
   local cask_paths=(
     "$ROOT_DIR/homebrew/skd-downloader.rb"
-    "/usr/local/Homebrew/Library/Taps/bonchaloo/homebrew-tap/Casks/skd-downloader.rb"
+    "${tap_dir:+$tap_dir/Casks/skd-downloader.rb}"
   )
 
   for cask_path in "${cask_paths[@]}"; do
-    if [[ -f "$cask_path" ]]; then
+    if [[ -n "$cask_path" && -f "$cask_path" ]]; then
       SKD_RELEASE_VERSION="$VERSION" \
         SKD_RELEASE_SHA="$checksum" \
         SKD_RELEASE_ASSET_ID="$asset_id" \
@@ -296,7 +298,6 @@ if [[ "$NOTARIZE" -eq 1 ]]; then
   run_notary_preflight
 fi
 
-npm test
 swift test
 
 PACKAGE_PATH="$(./script/build_and_run.sh --package | tail -n 1)"

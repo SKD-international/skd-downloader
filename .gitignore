@@ -1,4 +1,3 @@
-node_modules/
 dist/
 .build/
 .codex/
@@ -6,6 +5,3 @@ dist/
 .worktrees/
 .DS_Store
 *.log
-config.json
-history.json
-playlist:*

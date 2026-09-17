@@ -1,93 +1,70 @@
 # SKD Downloader — Shared Agent Context
 
 ## What This Is
-Downloader app built around `yt-dlp`, aimed at replacing MediaHuman with a simpler GUI.
+Native macOS downloader built around `yt-dlp`, aimed at replacing MediaHuman with a simpler GUI.
 
 - **GitHub:** `SKD-international/skd-downloader`
-- **Current release lane:** native Swift macOS app distributed through Homebrew
-- **Legacy lane:** Electron app for the older cross-platform Mac/Windows build
-
-## Current State
-- Native Swift sources live under `Sources/DownloaderCore` and `Sources/DownloaderUI`.
-- Native release packages are universal `arm64` + `x86_64`, macOS 14+ app bundles.
-- The Homebrew cask installs `yt-dlp` and `ffmpeg`; the app uses Homebrew-managed tools instead of bundling mutable binaries.
-- Legacy Electron sources remain in `main.js`, `preload.js`, `src/`, `lib/`, and `bin/`.
-- Cookie handling is still normalized through `lib/yt-dlp-config.js` for the Electron lane.
+- **Release lane:** Swift 6 SwiftPM app, universal `arm64` + `x86_64`, macOS 14+, distributed through the Homebrew cask in `bonchaloo/tap`
+- **Version:** single source of truth is the `VERSION` file (read by both scripts)
 
 ## Run
-Native macOS:
 ```bash
-npm run native:verify
-```
-
-Legacy Electron:
-```bash
-npm install
-npm start
+./script/build_and_run.sh --verify
 ```
 
 ## Build
-Native macOS:
 ```bash
-npm run native:build
-npm run native:package
-npm run native:release
-```
-
-Legacy Electron:
-```bash
-npm run dist:mac
-npm run dist:win
+./script/build_and_run.sh --build
+./script/build_and_run.sh --package
+./script/release_native.sh
 ```
 
 ## Test
 ```bash
-npm test
+swift test
+bash -n script/build_and_run.sh script/release_native.sh
 ```
 
 ## Architecture
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `Package.swift` | Native Swift package manifest |
-| `Sources/DownloaderCore/` | Native downloader engine, presets, probing, media library models |
-| `Sources/DownloaderUI/` | Native SwiftUI app state, queue, media library, player, settings |
-| `script/build_and_run.sh` | Native app build, package, launch, and local verification |
-| `script/release_native.sh` | Native release packaging, signing, notarization, upload, and cask metadata |
-| `homebrew/skd-downloader.rb` | Homebrew cask for the native app |
-| `main.js` | Electron main process, IPC handlers, downloader subprocesses, config/history persistence |
-| `preload.js` | Context bridge exposing `window.api` to the renderer |
-| `src/index.html` | App markup, settings modal, history modal, first-launch wizard |
-| `src/styles.css` | Visual system and layout |
-| `src/app.js` | Renderer logic: queue, history, settings, download flow |
-| `lib/yt-dlp-config.js` | Shared cookie/default normalization for yt-dlp config |
-| `bin/` | Bundled `yt-dlp`, `ffmpeg`, and `ffprobe` wrappers/binaries |
-| `tests/` | Automated tests for config/bootstrap logic |
+| `Package.swift` | Swift package manifest |
+| `VERSION` | App version used by build and release scripts |
+| `Sources/DownloaderCore/` | Engine, yt-dlp command builder and output parser, managed toolchain (yt-dlp + Deno installer), failure classifier, presets, media probe, media library models |
+| `Sources/DownloaderUI/` | SwiftUI app state, queue, media library, player, settings |
+| `Sources/SKDDownloaderNativeApp/` | App entry point |
+| `script/build_and_run.sh` | Build, package, launch, and local verification |
+| `script/release_native.sh` | Release packaging, signing, notarization, upload, cask metadata |
+| `homebrew/skd-downloader.rb` | Homebrew cask |
+| `tests/DownloaderCoreTests/`, `tests/DownloaderUITests/` | Swift Testing suites |
 
 ## Config & Data
-- macOS config: `~/Library/Application Support/skd-downloader/config.json`
-- macOS history: `~/Library/Application Support/skd-downloader/history.json`
-- Windows app data root: `%APPDATA%/skd-downloader/`
+- `~/Library/Application Support/skd-downloader-native/` holds `config.json`, `workbench.json`, `history.json`, `queue/queue.json`, `library/`, and `tools/bin/` (app-managed yt-dlp and Deno)
 
 ## Download Flow
 ```text
 Paste URL
-  -> `get-video-info`
-  -> spawn yt-dlp metadata query
-  -> renderer receives title/thumbnail/formats
+  -> YTDLPEngine.fetchInfo (yt-dlp --dump-json --flat-playlist)
+  -> queue items with a configuration snapshot
 
-Start download
-  -> `start-download`
-  -> spawn yt-dlp with normalized config + wrapper paths
-  -> parse progress from stdout
-  -> emit progress events
-  -> emit final path on completion
+Start queue
+  -> YTDLPCommandBuilder.build
+  -> YTDLPEngine.startDownload streams stdout/stderr lines
+  -> YTDLPOutputParser reads progress and destination
+  -> history + media library entry on success
 ```
 
+## Toolchain
+- `ManagedToolchain` installs yt-dlp (`yt-dlp_macos`, universal) and Deno (per-arch zip) from official GitHub releases, verifying SHA-256 against the published manifest. Never bundle or fetch tools from anywhere else.
+- `BinaryLocator` searches the managed `tools/bin` first, then Homebrew, `/usr/local/bin`, `~/.local/bin`, `~/.deno/bin`, `/opt/local/bin`, `/usr/bin`, and the login `PATH`.
+- Every yt-dlp invocation passes `--ffmpeg-location` and `--js-runtimes deno:<dir>` explicitly; GUI launches have a bare `PATH`.
+- `EngineHealth` marks yt-dlp `outdated` when behind the latest release or older than 60 days. Deno is a required tool.
+- `DownloadFailure.classify` maps yt-dlp output to a title plus a remedy (`updateYTDLP`, `installDeno`, `installFFmpeg`, `useBrowserCookies`, `checkURL`); UI surfaces the remedy as a button.
+- ffmpeg stays external: the FFmpeg project publishes no official macOS binary.
+
 ## Gotchas
-- Do not confuse the Homebrew cask with the legacy Electron package. The current cask is for the native Swift app.
 - Public casks should use the stable GitHub release download URL and load without `HOMEBREW_GITHUB_API_TOKEN`.
 - Private beta casks require explicit `SKD_RELEASE_PRIVATE_ASSET=1` release mode.
 - `yt-dlp` path selection and cookie handling are the most failure-prone parts of the app.
-- `ffmpeg` is required for merge/extract flows.
-- Packaged builds must include `bin/**/*` and `lib/**/*`.
-- Late IPC events can still affect queue state if the renderer clears a job while subprocess output is in flight.
+- `ffmpeg` is required for merge and audio extraction flows.
+- Browser cookie reads can hit macOS app-data privacy; the engine retries once without browser cookies when the cookie DB is unreadable.

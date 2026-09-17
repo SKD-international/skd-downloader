@@ -11,7 +11,7 @@ BUILD_CONFIGURATION="${SKD_NATIVE_BUILD_CONFIGURATION:-release}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/native"
-VERSION="${SKD_DOWNLOADER_VERSION:-$(cd "$ROOT_DIR" && node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")}"
+VERSION="${SKD_DOWNLOADER_VERSION:-$(tr -d '[:space:]' <"$ROOT_DIR/VERSION")}"
 STAGING_DIR="${SKD_NATIVE_STAGING_DIR:-/tmp/skd-downloader-native-$VERSION}"
 APP_BUNDLE="$STAGING_DIR/$APP_DISPLAY_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -71,7 +71,10 @@ build_slice() {
   esac
 
   echo "Building $PROCESS_NAME for $arch ($BUILD_CONFIGURATION)..." >&2
-  swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --product "$PROCESS_NAME" >&2
+  if ! swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --product "$PROCESS_NAME" >&2; then
+    echo "swift build failed for $arch" >&2
+    exit 1
+  fi
   bin_path="$(swift build -c "$BUILD_CONFIGURATION" --scratch-path "$scratch_path" --triple "$triple" --show-bin-path)"
 
   if [[ ! -x "$bin_path/$PROCESS_NAME" ]]; then

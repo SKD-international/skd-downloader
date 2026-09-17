@@ -16,6 +16,9 @@ struct DownloaderSettingsView: View {
     @AppStorage(DownloaderAppPreferences.themeKey)
     private var themeID = DownloaderThemePreset.skdMidnight.rawValue
 
+    @AppStorage(DownloaderAppPreferences.textScaleKey)
+    private var textScale = 1.0
+
     init(appState: DownloaderAppState) {
         self._appState = ObservedObject(wrappedValue: appState)
     }
@@ -49,10 +52,10 @@ struct DownloaderSettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(appState.isBinaryInstalled ? "yt-dlp \(appState.binaryVersion)" : "yt-dlp unavailable")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.skd(size: 12, weight: .semibold, design: .rounded))
 
                     Text(appState.binaryPath.isEmpty ? "Binary path unavailable." : appState.binaryPath)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.skd(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -77,6 +80,7 @@ struct DownloaderSettingsView: View {
         .onAppear {
             recentHistoryLimit = DownloaderAppPreferences.recentHistoryLimit()
             themeID = DownloaderAppPreferences.theme().rawValue
+            textScale = DownloaderAppPreferences.textScale()
         }
         .onChange(of: appState.configuration.cookiesBrowser) { _, _ in
             appState.configuration.cookiesBrowserConfigured = true
@@ -132,6 +136,18 @@ struct DownloaderSettingsView: View {
                     Text("Title").tag("title")
                     Text("Artist - Title").tag("artist-title")
                 }
+            }
+
+            Section("Accessibility") {
+                Picker("Text Size", selection: $textScale) {
+                    ForEach(DownloaderAppPreferences.textScaleSteps, id: \.self) { step in
+                        Text("\(Int(step * 100))%").tag(step)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("Scales every label in the app. ⌘+ and ⌘− change it from anywhere.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Network") {
@@ -234,35 +250,55 @@ struct DownloaderSettingsView: View {
             Section("Engine Health") {
                 ForEach(appState.engineHealth.tools) { tool in
                     LabeledContent(tool.name) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(tool.state.rawValue.capitalized)
-                                .font(.system(size: 12, weight: .semibold))
-                            Text(tool.path.isEmpty ? tool.message : tool.path)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                        HStack(spacing: 10) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(tool.state == .outdated ? "Update available" : tool.state.rawValue.capitalized)
+                                    .font(.skd(size: 12, weight: .semibold))
+                                Text(tool.path.isEmpty ? tool.message : tool.path)
+                                    .font(.skd(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+
+                            if let managed = tool.managedTool, tool.state != .installed {
+                                Button(appState.installingTool == managed ? "Installing…" : (tool.state == .outdated ? "Update" : "Install")) {
+                                    Task { await appState.installManagedTool(managed) }
+                                }
+                                .disabled(appState.installingTool != nil)
+                            }
                         }
                     }
+                }
+
+                if let message = appState.toolchainMessage {
+                    Text(message)
+                        .font(.skd(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
                 }
 
                 HStack {
                     Button("Refresh Engine") {
                         Task { await appState.refreshEngineHealth() }
                     }
-                    .disabled(appState.isCheckingEngineHealth)
+                    .disabled(appState.isCheckingEngineHealth || appState.installingTool != nil)
+
+                    Button("Update yt-dlp") {
+                        Task { await appState.installManagedTool(.ytDLP) }
+                    }
+                    .disabled(appState.installingTool != nil)
 
                     Button("Copy Diagnostics") {
                         appState.copyEngineDiagnostics()
                     }
 
-                    Button("Copy Install") {
+                    Button("Copy ffmpeg Install") {
                         appState.copyEngineInstallCommand()
                     }
-
-                    Button("Copy Update") {
-                        appState.copyEngineUpdateCommand()
-                    }
                 }
+
+                Text("yt-dlp and Deno are downloaded from their official GitHub releases, verified against the published SHA-256 sums, and kept in ~/Library/Application Support/skd-downloader-native/tools/bin. ffmpeg comes from Homebrew.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Setup") {
@@ -279,10 +315,10 @@ struct DownloaderSettingsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Appearance")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.skd(size: 18, weight: .bold))
 
                     Text("Choose the workspace tone that fits the way you queue and inspect downloads.")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.skd(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
 
@@ -307,10 +343,10 @@ struct DownloaderSettingsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Theme Notes")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.skd(size: 13, weight: .bold))
 
                     Text("SKD Midnight is tuned for focused queue work. Linear Light and Notion Warm keep the same structure with lower contrast.")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.skd(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 4)
