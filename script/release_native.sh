@@ -144,8 +144,9 @@ require_full_xcode() {
     die "xcode-select has no active developer directory."
   fi
 
-  if [[ "$developer_dir" != *"/Xcode.app/Contents/Developer" ]]; then
-    die "full Xcode is required, but xcode-select points to '$developer_dir'."
+  # Command Line Tools alone cannot notarize; any full Xcode (including betas) ships notarytool.
+  if [[ ! -x "$developer_dir/usr/bin/notarytool" ]]; then
+    die "full Xcode is required, but xcode-select points to '$developer_dir' (no notarytool there)."
   fi
 
   echo "  Xcode:      $developer_dir"
