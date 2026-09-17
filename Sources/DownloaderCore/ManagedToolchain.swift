@@ -140,8 +140,11 @@ public struct ManagedToolchain: Sendable {
             try assetData.write(to: binary)
         }
 
-        guard fileManager.fileExists(atPath: binary.path) else {
-            throw ManagedToolchainError(message: "\(tool.assetName) did not contain a \(tool.rawValue) executable.")
+        // attributesOfItem does not follow symlinks: refuse anything but a regular file so a
+        // crafted archive cannot make chmod or the move act on a path outside the staging dir.
+        let attributes = try? fileManager.attributesOfItem(atPath: binary.path)
+        guard attributes?[.type] as? FileAttributeType == .typeRegular else {
+            throw ManagedToolchainError(message: "\(tool.assetName) did not contain a regular \(tool.rawValue) executable.")
         }
 
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
@@ -157,18 +160,24 @@ public struct ManagedToolchain: Sendable {
         progress("Installed \(tool.displayName) \(version) into \(binDirectory.path).")
     }
 
-    /// Parses `<sha256>  <name>` and `<sha256> *<name>` manifest lines.
+    /// Parses `<sha256>  <name>` and `<sha256> *<name>` manifest lines. A single-asset
+    /// manifest may also be one bare digest.
     static func expectedChecksum(in manifest: String, for assetName: String) -> String? {
+        var bareDigest: String?
         for line in manifest.split(whereSeparator: \.isNewline) {
             let parts = line.split(whereSeparator: \.isWhitespace).map(String.init)
-            guard parts.count >= 2, parts[0].count == 64 else { continue }
+            guard let digest = parts.first, digest.count == 64, digest.allSatisfy(\.isHexDigit) else { continue }
+            if parts.count == 1 {
+                bareDigest = bareDigest == nil ? digest.lowercased() : bareDigest
+                continue
+            }
             let name = parts[1].hasPrefix("*") ? String(parts[1].dropFirst()) : parts[1]
             if name == assetName {
-                return parts[0].lowercased()
+                return digest.lowercased()
             }
         }
 
-        return nil
+        return bareDigest
     }
 
     static func sha256Hex(of data: Data) -> String {

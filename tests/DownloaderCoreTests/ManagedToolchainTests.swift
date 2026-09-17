@@ -20,6 +20,39 @@ func checksumManifestParsesCoreutilsAndBSDStyles() {
     )
     #expect(ManagedToolchain.expectedChecksum(in: manifest, for: "yt-dlp") == nil)
     #expect(ManagedToolchain.expectedChecksum(in: manifest, for: "deno") == nil)
+    #expect(
+        ManagedToolchain.expectedChecksum(in: "5CD46D6268F6F78F5D88BDC7159D20BD44CDAA4B3303474839F87EC6FE7AE25C\n", for: "deno-x.zip")
+            == "5cd46d6268f6f78f5d88bdc7159d20bd44cdaa4b3303474839f87ec6fe7ae25c"
+    )
+    #expect(ManagedToolchain.expectedChecksum(in: "not-a-checksum\n", for: "deno-x.zip") == nil)
+}
+
+@Test
+func installRefusesSymlinkedArchiveEntries() async throws {
+    let fixture = try ToolchainFixture()
+    defer { fixture.cleanUp() }
+
+    let payloadDirectory = fixture.root.appendingPathComponent("payload", isDirectory: true)
+    try FileManager.default.createDirectory(at: payloadDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(
+        at: payloadDirectory.appendingPathComponent("deno"),
+        withDestinationURL: URL(fileURLWithPath: "/bin/sh")
+    )
+    let zip = fixture.root.appendingPathComponent(ManagedTool.deno.assetName)
+    let ditto = Process()
+    ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+    ditto.arguments = ["-c", "-k", "--sequesterRsrc", payloadDirectory.path, zip.path]
+    try ditto.run()
+    ditto.waitUntilExit()
+    let manifest = try fixture.write(
+        ManagedTool.deno.checksumAssetName,
+        contents: "\(ManagedToolchain.sha256Hex(of: try Data(contentsOf: zip)))  \(ManagedTool.deno.assetName)\n"
+    )
+
+    await #expect(throws: ManagedToolchainError.self) {
+        try await fixture.toolchain.install(.deno, version: "x", assetURL: zip, checksumURL: manifest) { _ in }
+    }
+    #expect(fixture.toolchain.installedURL(for: .deno) == nil)
 }
 
 @Test

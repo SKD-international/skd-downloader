@@ -305,13 +305,13 @@ private extension Color {
 enum DownloaderTextScale {
     /// Process-wide multiplier written by `DownloaderAppState` when preferences load or change.
     /// Fonts read this instead of UserDefaults so layout passes never touch the defaults store.
-    nonisolated(unsafe) static var current: Double = 1.0
+    @MainActor static var current: Double = 1.0
 }
 
 extension Font {
     /// Every interface font goes through here so the Text Size preference scales the whole app.
     /// Views re-evaluate when `DownloaderAppState.textScale` publishes, picking up the new multiplier.
-    static func skd(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+    @MainActor static func skd(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
         .system(size: size * DownloaderTextScale.current, weight: weight, design: design)
     }
 }
