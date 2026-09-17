@@ -17,6 +17,8 @@ For a simple native Mac walkthrough, see the [large-print Mac guide](docs/native
 - **Subtitles** — Download and embed subtitles
 - **Download history** — Searchable log of past downloads
 - **Native media library** — Browse, filter, and play downloaded media on macOS
+- **Self-updating engine** — One-click yt-dlp and Deno install/update from official releases; clear fixes for 403, sign-in, and geo errors
+- **Large text** — Text Size up to 175% for low-vision use
 - **Dark theme** — Premium dark cinematic UI
 
 ## Install
@@ -46,15 +48,15 @@ Native macOS app:
 ```bash
 git clone https://github.com/SKD-international/skd-downloader.git
 cd skd-downloader
-brew install yt-dlp ffmpeg
+brew install ffmpeg
 swift test
 ./script/build_and_run.sh --verify
 ```
 
 ### Prerequisites
 
-- Homebrew cask installs [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [ffmpeg](https://ffmpeg.org/) automatically.
-- Source builds should install them first: `brew install yt-dlp ffmpeg`
+- The app installs and updates [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://deno.com) itself from their official releases (SHA-256 verified).
+- [ffmpeg](https://ffmpeg.org/) comes from Homebrew (`brew install ffmpeg`); the cask installs it on Apple Silicon. See [SETUP.md](SETUP.md) for Intel Macs.
 
 ## Build
 
@@ -73,7 +75,7 @@ The Swift native app is packaged separately for the Homebrew cask:
 ./script/release_native.sh
 ```
 
-This runs the Swift test suite, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
+This runs the Swift test suite, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The app manages yt-dlp and Deno itself; ffmpeg comes from Homebrew.
 
 To upload the native artifact to GitHub:
 

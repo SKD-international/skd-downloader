@@ -52,9 +52,19 @@ If macOS asks whether to open it, choose **Open**.
 
 The app is signed and notarized by Apple.
 
+## Make The App Text Bigger
+
+If the text in SKD Downloader is too small:
+
+1. Hold the **⌘ (Command)** key and press **+** (plus).
+2. Press it again for even bigger text. The biggest setting is 175%.
+3. Hold **⌘** and press **−** (minus) to make it smaller again, or **⌘ 0** to go back to normal.
+
+You can also open **SKD Downloader → Settings → General → Text Size** and pick a size.
+
 ## Make The Mac Easier To See
 
-If the app or Mac text is too small:
+If all Mac text is too small:
 
 1. Click the Apple menu in the top left.
 2. Open **System Settings**.

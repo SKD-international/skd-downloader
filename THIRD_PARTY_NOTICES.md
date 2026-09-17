@@ -1,12 +1,15 @@
 # Third-Party Notices
 
-SKD Downloader uses external tools and platforms. This repository does not
-vendor the Homebrew-provided `yt-dlp`, `ffmpeg`, or `ffprobe` binaries for the
-native macOS cask.
+SKD Downloader uses external tools and platforms. This repository vendors no
+binaries.
 
 ## Runtime Tools
 
-- `yt-dlp`: installed by Homebrew for media extraction.
+- `yt-dlp` (Unlicense): downloaded by the app from the official
+  `yt-dlp/yt-dlp` GitHub release (`yt-dlp_macos`) and verified against the
+  release's `SHA2-256SUMS`.
+- `deno` (MIT): downloaded by the app from the official `denoland/deno` GitHub
+  release and verified against the asset's `.sha256sum`.
 - `ffmpeg` and `ffprobe`: installed by Homebrew for merging, probing, and
   conversion workflows.
 
