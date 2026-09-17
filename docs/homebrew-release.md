@@ -35,7 +35,17 @@ export SKD_NOTARY_PROFILE=skd-downloader-notary
 ./script/release_native.sh --preflight
 ```
 
-Create the profile if it is missing:
+Create the profile if it is missing. With an App Store Connect API key:
+
+```bash
+export SKD_NOTARY_PROFILE=skd-downloader-notary
+export SKD_NOTARY_KEY_PATH=<path-to-AuthKey_XXXX.p8>
+export SKD_NOTARY_KEY_ID=<key-id>
+export SKD_NOTARY_ISSUER=<issuer-id>
+./script/release_native.sh --setup-profile
+```
+
+Or with an Apple ID and app-specific password:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary

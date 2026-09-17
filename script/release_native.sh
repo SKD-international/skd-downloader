@@ -18,6 +18,9 @@ NOTARY_APPLE_ID="${SKD_NOTARY_APPLE_ID:-}"
 NOTARY_TEAM_ID="${SKD_NOTARY_TEAM_ID:-}"
 NOTARY_PASSWORD="${SKD_NOTARY_PASSWORD:-}"
 NOTARY_SYNC="${SKD_NOTARY_SYNC:-0}"
+NOTARY_KEY_PATH="${SKD_NOTARY_KEY_PATH:-}"
+NOTARY_KEY_ID="${SKD_NOTARY_KEY_ID:-}"
+NOTARY_ISSUER="${SKD_NOTARY_ISSUER:-}"
 
 cleanup() {
   if [[ -n "$VERIFY_DIR" ]]; then
@@ -89,6 +92,11 @@ Environment:
   SKD_NOTARY_PASSWORD     Optional app-specific password. Omit it for
                            notarytool's secure prompt in an interactive shell.
   SKD_NOTARY_SYNC=1       Store the notarytool profile in iCloud Keychain.
+  SKD_NOTARY_KEY_PATH     App Store Connect API key (.p8) for --setup-profile.
+  SKD_NOTARY_KEY_ID       Key ID of that API key.
+  SKD_NOTARY_ISSUER       Issuer ID of that API key. When all three are set,
+                           --setup-profile uses the API key instead of an
+                           Apple ID and app-specific password.
   SKD_ALLOW_UNNOTARIZED_UPLOAD=1
                            Allow --upload without --notarize.
   SKD_RELEASE_PRIVATE_ASSET=1
@@ -152,8 +160,19 @@ require_notary_profile() {
   fi
 }
 
+uses_api_key() {
+  [[ -n "$NOTARY_KEY_PATH" || -n "$NOTARY_KEY_ID" || -n "$NOTARY_ISSUER" ]]
+}
+
 require_notary_setup_inputs() {
   require_notary_profile
+
+  if uses_api_key; then
+    [[ -n "$NOTARY_KEY_PATH" && -n "$NOTARY_KEY_ID" && -n "$NOTARY_ISSUER" ]] \
+      || die "SKD_NOTARY_KEY_PATH, SKD_NOTARY_KEY_ID, and SKD_NOTARY_ISSUER must all be set for API-key --setup-profile."
+    [[ -r "$NOTARY_KEY_PATH" ]] || die "SKD_NOTARY_KEY_PATH is not readable: $NOTARY_KEY_PATH"
+    return
+  fi
 
   if [[ -z "$NOTARY_APPLE_ID" ]]; then
     die "SKD_NOTARY_APPLE_ID is required for --setup-profile."
@@ -191,30 +210,30 @@ run_notary_profile_setup() {
   require_full_xcode
   require_xcrun_tool "notarytool"
 
-  local command=(
-    xcrun notarytool store-credentials "$NOTARY_PROFILE"
-    --apple-id "$NOTARY_APPLE_ID"
-    --team-id "$NOTARY_TEAM_ID"
-    --validate
-  )
+  local command=(xcrun notarytool store-credentials "$NOTARY_PROFILE" --validate)
 
   if [[ "$NOTARY_SYNC" == "1" ]]; then
     command+=(--sync)
   fi
 
-  if [[ -n "$NOTARY_PASSWORD" ]]; then
-    command+=(--password "$NOTARY_PASSWORD")
-  else
-    if [[ ! -t 0 ]]; then
-      die "SKD_NOTARY_PASSWORD is required for non-interactive --setup-profile. Run from a terminal for notarytool's secure prompt, or provide an app-specific password through the environment."
-    fi
-    echo "  Password:   not set; notarytool will prompt securely."
-  fi
-
   echo "Creating notarytool keychain profile:"
   echo "  Profile:    $NOTARY_PROFILE"
-  echo "  Apple ID:   $NOTARY_APPLE_ID"
-  echo "  Team ID:    $NOTARY_TEAM_ID"
+  if uses_api_key; then
+    command+=(--key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
+    echo "  Auth:       App Store Connect API key $NOTARY_KEY_ID"
+  else
+    command+=(--apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID")
+    if [[ -n "$NOTARY_PASSWORD" ]]; then
+      command+=(--password "$NOTARY_PASSWORD")
+    else
+      if [[ ! -t 0 ]]; then
+        die "SKD_NOTARY_PASSWORD is required for non-interactive --setup-profile. Run from a terminal for notarytool's secure prompt, or provide an app-specific password through the environment."
+      fi
+      echo "  Password:   not set; notarytool will prompt securely."
+    fi
+    echo "  Apple ID:   $NOTARY_APPLE_ID"
+    echo "  Team ID:    $NOTARY_TEAM_ID"
+  fi
   if [[ "$NOTARY_SYNC" == "1" ]]; then
     echo "  Keychain:   iCloud sync"
   else
@@ -388,12 +407,13 @@ cat >"$NOTES_PATH" <<EOF
 SKD Downloader Native $VERSION
 
 - Native Swift macOS app bundle for Homebrew cask distribution.
-- Universal macOS binary for Apple Silicon and Intel Macs on Sonoma or Sequoia.
-- Uses Homebrew-managed yt-dlp/ffmpeg/ffprobe through the cask dependencies.
-- Adds resilient cookie handling with fallback when browser cookie access is denied.
-- Adds native queue stop controls, format inspection, manual yt-dlp format selection, copyable command previews, and per-job activity logs.
-- Adds download archive duplicate protection, info/description sidecar metadata, embedded chapters, and fragment worker tuning.
-- Adds an Engine Health panel for yt-dlp, ffmpeg, ffprobe, and Homebrew diagnostics.
+- Universal macOS binary for Apple Silicon and Intel Macs on macOS 14 or newer.
+- Installs and updates yt-dlp and Deno itself from their official GitHub releases (SHA-256 verified); ffmpeg comes from Homebrew.
+- Engine Health flags outdated yt-dlp builds and offers one-click Install/Update.
+- Failed downloads show a plain-language reason with a fix button (update yt-dlp, install Deno, ffmpeg command, browser cookies).
+- Text Size setting from 100% to 175% (⌘+ / ⌘−).
+- Headless diagnostics: SKDDownloaderNative --doctor | --install-tools | --download <url>.
+- Firefox, Chrome, and Safari cookie sources with retry when the cookie database is unreadable.
 - Signed with Developer ID$(if [[ "$NOTARIZE" -eq 1 ]]; then echo " and notarized"; else echo ""; fi).
 
 Artifact:
