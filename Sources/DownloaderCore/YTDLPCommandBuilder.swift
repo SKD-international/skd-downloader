@@ -7,13 +7,12 @@ public enum YTDLPCommandBuilder {
         mode: DownloadMode,
         formatOverride: String?,
         qualityOverride: String?,
-        formatID: String? = nil
+        formatID: String? = nil,
+        ffmpegDirectory: URL? = BinaryLocator.ffmpegDirectory(),
+        jsRuntimeDirectory: URL? = BinaryLocator.locate("deno")?.deletingLastPathComponent()
     ) -> [String] {
         var args = ["--no-warnings", "--newline"]
-
-        if let ffmpegDirectory = BinaryLocator.ffmpegDirectory() {
-            args += ["--ffmpeg-location", ffmpegDirectory.path]
-        }
+        args += runtimeArguments(ffmpegDirectory: ffmpegDirectory, jsRuntimeDirectory: jsRuntimeDirectory)
 
         args += ["--progress-template", "download:%(progress._percent_str)s %(progress._speed_str)s %(progress._eta_str)s"]
 
@@ -131,6 +130,21 @@ public enum YTDLPCommandBuilder {
         }
 
         args.append(url)
+        return args
+    }
+
+    /// Points yt-dlp at the ffmpeg and Deno the app found, so a GUI launch with a bare PATH
+    /// still merges formats and passes YouTube's JavaScript challenges.
+    public static func runtimeArguments(ffmpegDirectory: URL?, jsRuntimeDirectory: URL?) -> [String] {
+        var args: [String] = []
+        if let ffmpegDirectory {
+            args += ["--ffmpeg-location", ffmpegDirectory.path]
+        }
+
+        if let jsRuntimeDirectory {
+            args += ["--js-runtimes", "deno:\(jsRuntimeDirectory.path)"]
+        }
+
         return args
     }
 

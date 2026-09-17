@@ -2,6 +2,7 @@ import Foundation
 
 public enum EngineToolState: String, Codable, Equatable, Sendable {
     case installed
+    case outdated
     case missing
     case failed
 }
@@ -14,6 +15,7 @@ public struct EngineToolStatus: Codable, Equatable, Identifiable, Sendable {
     public let path: String
     public let required: Bool
     public let message: String
+    public let latestVersion: String?
 
     public init(
         id: String,
@@ -22,7 +24,8 @@ public struct EngineToolStatus: Codable, Equatable, Identifiable, Sendable {
         version: String,
         path: String,
         required: Bool,
-        message: String = ""
+        message: String = "",
+        latestVersion: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -31,10 +34,16 @@ public struct EngineToolStatus: Codable, Equatable, Identifiable, Sendable {
         self.path = path
         self.required = required
         self.message = message
+        self.latestVersion = latestVersion
     }
 
     public var isUsable: Bool {
-        state == .installed
+        state == .installed || state == .outdated
+    }
+
+    /// The tool the app can install or update itself, if any.
+    public var managedTool: ManagedTool? {
+        ManagedTool(rawValue: id)
     }
 
     public var compactVersion: String {
@@ -45,10 +54,14 @@ public struct EngineToolStatus: Codable, Equatable, Identifiable, Sendable {
             return "\(parts[0]) \(parts[2])"
         }
 
+        if id == "deno", parts.count >= 2, parts[0] == "deno" {
+            return parts[1]
+        }
+
         return version
     }
 
-    public static func missing(id: String, name: String, required: Bool) -> EngineToolStatus {
+    public static func missing(id: String, name: String, required: Bool, message: String? = nil) -> EngineToolStatus {
         EngineToolStatus(
             id: id,
             name: name,
@@ -56,7 +69,7 @@ public struct EngineToolStatus: Codable, Equatable, Identifiable, Sendable {
             version: "Missing",
             path: "",
             required: required,
-            message: "\(name) was not found on PATH."
+            message: message ?? "\(name) was not found."
         )
     }
 }
@@ -78,6 +91,10 @@ public struct EngineHealthReport: Codable, Equatable, Sendable {
         requiredTools.filter { !$0.isUsable }
     }
 
+    public var outdatedTools: [EngineToolStatus] {
+        tools.filter { $0.state == .outdated }
+    }
+
     public var isReady: Bool {
         !requiredTools.isEmpty && missingRequiredTools.isEmpty
     }
@@ -87,7 +104,11 @@ public struct EngineHealthReport: Codable, Equatable, Sendable {
             return "Checking Engine"
         }
 
-        return isReady ? "Engine Ready" : "Engine Needs Setup"
+        if !isReady {
+            return "Engine Needs Setup"
+        }
+
+        return outdatedTools.isEmpty ? "Engine Ready" : "Update Recommended"
     }
 
     public var statusMessage: String {
@@ -95,20 +116,24 @@ public struct EngineHealthReport: Codable, Equatable, Sendable {
             return "Engine health check has not run yet."
         }
 
-        if isReady {
-            return "yt-dlp, ffmpeg, and ffprobe are available."
+        if !isReady {
+            let missing = missingRequiredTools.map(\.name).joined(separator: ", ")
+            return "Missing required tools: \(missing)."
         }
 
-        let missing = missingRequiredTools.map(\.name).joined(separator: ", ")
-        return "Missing required tools: \(missing)."
+        if let outdated = outdatedTools.first {
+            return outdated.message.isEmpty ? "\(outdated.name) is outdated." : outdated.message
+        }
+
+        return "yt-dlp, Deno, ffmpeg, and ffprobe are available."
     }
 
     public var installCommand: String {
-        "brew install yt-dlp ffmpeg"
+        "brew install ffmpeg"
     }
 
     public var updateCommand: String {
-        "brew update && brew upgrade yt-dlp ffmpeg"
+        "brew upgrade ffmpeg"
     }
 
     public var diagnosticsText: String {
@@ -123,8 +148,8 @@ public struct EngineHealthReport: Codable, Equatable, Sendable {
             "Checked: \(checkedAt.formatted(date: .numeric, time: .standard))",
             "Status: \(statusTitle)",
         ] + rows + [
-            "Install: \(installCommand)",
-            "Update: \(updateCommand)",
+            "Managed tools: \(ManagedToolchain.defaultBinDirectory.path)",
+            "ffmpeg install: \(installCommand)",
         ]).joined(separator: "\n")
     }
 }
