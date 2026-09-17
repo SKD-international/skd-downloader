@@ -1,8 +1,6 @@
 # Native Homebrew Release Workflow
 
-This workflow is for the native Swift macOS app. The old Electron app still has
-its own `npm start`, `dist:mac`, and `dist:win` path, but it is not the current
-Homebrew artifact.
+This workflow is for the native Swift macOS app.
 
 ## Recommendation
 
@@ -34,7 +32,7 @@ Validate the notarization profile before a release:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:notary:preflight
+./script/release_native.sh --preflight
 ```
 
 Create the profile if it is missing:
@@ -43,14 +41,14 @@ Create the profile if it is missing:
 export SKD_NOTARY_PROFILE=skd-downloader-notary
 export SKD_NOTARY_APPLE_ID=<apple-id>
 export SKD_NOTARY_TEAM_ID=<developer-team-id>
-npm run native:notary:setup
+./script/release_native.sh --setup-profile
 ```
 
 ## Public Release
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:release:upload
+./script/release_native.sh --notarize --upload
 brew audit --cask --strict skd-downloader
 brew install --cask --dry-run skd-downloader
 ```
@@ -78,7 +76,7 @@ Use this only when the GitHub release asset intentionally remains private:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-SKD_RELEASE_PRIVATE_ASSET=1 npm run native:release:upload
+SKD_RELEASE_PRIVATE_ASSET=1 ./script/release_native.sh --notarize --upload
 ```
 
 Users of the private cask need a token:
@@ -127,7 +125,6 @@ brew install --cask skd-downloader
 Before calling a Homebrew release done, run:
 
 ```bash
-npm test
 swift test
 bash -n script/build_and_run.sh script/release_native.sh
 brew audit --cask --strict skd-downloader

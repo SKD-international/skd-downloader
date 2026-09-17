@@ -9,37 +9,12 @@ public enum BinaryLocator {
         locate("ffmpeg")?.deletingLastPathComponent()
     }
 
-    static func searchPaths(
-        for name: String,
-        bundleResourceURL: URL? = Bundle.main.resourceURL,
-        repositoryRoot: URL = repositoryRoot(),
-        includeDevelopmentCandidates: Bool = shouldIncludeDevelopmentCandidates()
-    ) -> [URL] {
-        var candidates: [URL] = []
-
-        if name == "yt-dlp" {
-            candidates.append(contentsOf: [
-                URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"),
-                URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
-                URL(fileURLWithPath: "/usr/bin/yt-dlp"),
-            ])
-        } else {
-            candidates.append(contentsOf: [
-                URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
-                URL(fileURLWithPath: "/usr/local/bin/\(name)"),
-                URL(fileURLWithPath: "/usr/bin/\(name)"),
-            ])
-        }
-
-        if includeDevelopmentCandidates {
-            if let bundleURL = bundleResourceURL {
-                candidates.append(bundleURL.appendingPathComponent("bin/\(name)"))
-            }
-
-            candidates.append(repositoryRoot.appendingPathComponent("bin/\(name)"))
-        }
-
-        return candidates
+    static func searchPaths(for name: String) -> [URL] {
+        [
+            URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
+            URL(fileURLWithPath: "/usr/local/bin/\(name)"),
+            URL(fileURLWithPath: "/usr/bin/\(name)"),
+        ]
     }
 
     private static func isExecutableFile(_ url: URL) -> Bool {
@@ -49,16 +24,5 @@ public enum BinaryLocator {
         }
 
         return FileManager.default.isExecutableFile(atPath: url.path)
-    }
-
-    private static func repositoryRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // DownloaderCore
-            .deletingLastPathComponent() // Sources
-            .deletingLastPathComponent() // repo root
-    }
-
-    private static func shouldIncludeDevelopmentCandidates() -> Bool {
-        Bundle.main.bundleURL.pathExtension != "app"
     }
 }

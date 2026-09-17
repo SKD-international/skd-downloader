@@ -102,7 +102,7 @@ cd /path/to/skd-downloader
 Build the uploadable zip and release notes:
 
 ```bash
-npm run native:release
+./script/release_native.sh
 ```
 
 If the app still shows `Binary Missing`, open Settings and use the setup section to confirm the detected binary path.
@@ -111,8 +111,8 @@ If the app still shows `Binary Missing`, open Settings and use the setup section
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:notary:preflight
-npm run native:release:upload
+./script/release_native.sh --preflight
+./script/release_native.sh --notarize --upload
 brew audit --cask --strict skd-downloader
 brew install --cask --dry-run skd-downloader
 ```

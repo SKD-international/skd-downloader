@@ -18,7 +18,6 @@ For a simple native Mac walkthrough, see the [large-print Mac guide](docs/native
 - **Download history** — Searchable log of past downloads
 - **Native media library** — Browse, filter, and play downloaded media on macOS
 - **Dark theme** — Premium dark cinematic UI
-- **Legacy cross-platform source** — Older Mac/Windows source remains available for developers
 
 ## Install
 
@@ -49,16 +48,7 @@ git clone https://github.com/SKD-international/skd-downloader.git
 cd skd-downloader
 brew install yt-dlp ffmpeg
 swift test
-npm run native:verify
-```
-
-Older cross-platform app source:
-
-```bash
-git clone https://github.com/SKD-international/skd-downloader.git
-cd skd-downloader
-npm install
-npm start
+./script/build_and_run.sh --verify
 ```
 
 ### Prerequisites
@@ -71,18 +61,8 @@ npm start
 Native macOS:
 
 ```bash
-npm run native:build
-npm run native:package
-```
-
-Older cross-platform build:
-
-```bash
-# Mac
-npm run dist:mac
-
-# Windows
-npm run dist:win
+./script/build_and_run.sh --build
+./script/build_and_run.sh --package
 ```
 
 ## Native macOS Release
@@ -90,17 +70,17 @@ npm run dist:win
 The Swift native app is packaged separately for the Homebrew cask:
 
 ```bash
-npm run native:release
+./script/release_native.sh
 ```
 
-This runs the Node and Swift test suites, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
+This runs the Swift test suite, builds a universal `SKD Downloader.app`, signs it with the first available Developer ID Application certificate, creates `dist/native/SKD.Downloader.Native-<version>-mac.zip`, and writes release notes under `dist/native/`. The Homebrew cask installs `yt-dlp` and `ffmpeg`; the native app resolves those Homebrew-managed tools directly.
 
 To upload the native artifact to GitHub:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-npm run native:notary:preflight
-npm run native:release:upload
+./script/release_native.sh --preflight
+./script/release_native.sh --notarize --upload
 brew audit --cask --strict skd-downloader
 ```
 
@@ -111,7 +91,7 @@ terminal so macOS can prompt securely for the app-specific Apple ID password:
 export SKD_NOTARY_PROFILE=<notarytool-keychain-profile>
 export SKD_NOTARY_APPLE_ID=<apple-id>
 export SKD_NOTARY_TEAM_ID=<developer-team-id>
-npm run native:notary:setup
+./script/release_native.sh --setup-profile
 ```
 
 Private beta release assets can still be published when the repository or asset
@@ -119,7 +99,7 @@ must remain private:
 
 ```bash
 export SKD_NOTARY_PROFILE=skd-downloader-notary
-SKD_RELEASE_PRIVATE_ASSET=1 npm run native:release:upload
+SKD_RELEASE_PRIVATE_ASSET=1 ./script/release_native.sh --notarize --upload
 ```
 
 See `docs/homebrew-release.md` for the full upload, tap, audit, and rollback

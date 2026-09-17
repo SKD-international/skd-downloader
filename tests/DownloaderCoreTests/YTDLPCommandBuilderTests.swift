@@ -428,18 +428,12 @@ func commandResultDefaultsToNotCancelled() {
 }
 
 @Test
-func homebrewBinaryPathsArePreferredBeforeDevelopmentWrappers() {
-    let repo = URL(fileURLWithPath: "/tmp/skd-downloader", isDirectory: true)
-
-    let paths = BinaryLocator.searchPaths(
-        for: "yt-dlp",
-        repositoryRoot: repo,
-        includeDevelopmentCandidates: true
-    )
+func homebrewBinaryPathsArePreferredBeforeSystemPaths() {
+    let paths = BinaryLocator.searchPaths(for: "yt-dlp")
 
     #expect(paths.first == URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"))
     #expect(paths.contains(URL(fileURLWithPath: "/usr/local/bin/yt-dlp")))
-    #expect(paths.last == repo.appendingPathComponent("bin/yt-dlp"))
+    #expect(paths.last == URL(fileURLWithPath: "/usr/bin/yt-dlp"))
 }
 
 @Test

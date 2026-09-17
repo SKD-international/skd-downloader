@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="${SKD_GITHUB_REPO:-SKD-international/skd-downloader}"
-VERSION="$(cd "$ROOT_DIR" && node -p "require('./package.json').version")"
+VERSION="$(tr -d '[:space:]' <"$ROOT_DIR/VERSION")"
 TAG="v$VERSION"
 ASSET_NAME="SKD.Downloader.Native-$VERSION-mac.zip"
 ASSET_PATH="$ROOT_DIR/dist/native/$ASSET_NAME"
@@ -296,7 +296,6 @@ if [[ "$NOTARIZE" -eq 1 ]]; then
   run_notary_preflight
 fi
 
-npm test
 swift test
 
 PACKAGE_PATH="$(./script/build_and_run.sh --package | tail -n 1)"

@@ -11,7 +11,7 @@ BUILD_CONFIGURATION="${SKD_NATIVE_BUILD_CONFIGURATION:-release}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/native"
-VERSION="${SKD_DOWNLOADER_VERSION:-$(cd "$ROOT_DIR" && node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")}"
+VERSION="${SKD_DOWNLOADER_VERSION:-$(tr -d '[:space:]' <"$ROOT_DIR/VERSION")}"
 STAGING_DIR="${SKD_NATIVE_STAGING_DIR:-/tmp/skd-downloader-native-$VERSION}"
 APP_BUNDLE="$STAGING_DIR/$APP_DISPLAY_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
