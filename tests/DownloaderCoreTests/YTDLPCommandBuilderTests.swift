@@ -364,6 +364,25 @@ func defaultCookieArgsUseDetectedChromeProfile() throws {
 }
 
 @Test
+func defaultCookieArgsPreferDetectedFirefoxProfile() throws {
+    let home = try temporaryHome()
+    defer { try? FileManager.default.removeItem(at: home) }
+    for path in ["Library/Application Support/Firefox/Profiles/abc.default-release", "Library/Application Support/Google/Chrome/Default"] {
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(path, isDirectory: true), withIntermediateDirectories: true)
+    }
+
+    let config = DownloadConfiguration(cookiesBrowser: .none, cookiesBrowserConfigured: false)
+
+    #expect(
+        YTDLPCommandBuilder.cookieArguments(
+            url: "https://youtube.com/watch?v=abc123",
+            configuration: config,
+            homeDirectory: home
+        ) == ["--cookies-from-browser", "firefox"]
+    )
+}
+
+@Test
 func explicitNoCookieModeStaysNoCookieMode() throws {
     let home = try temporaryHome()
     defer { try? FileManager.default.removeItem(at: home) }
@@ -388,6 +407,7 @@ func cookiePermissionErrorsAreRetryableWithoutCookies() {
     let output = "ERROR: could not copy Chrome cookie database. Operation not permitted. Grant Full Disk Access or use --no-cookies-from-browser."
 
     #expect(YTDLPEngine.shouldRetryWithoutCookies(output: output))
+    #expect(YTDLPEngine.shouldRetryWithoutCookies(output: "ERROR: could not find firefox cookies database in '/Users/x/Library/Application Support/Firefox/Profiles'"))
     #expect(!YTDLPEngine.shouldRetryWithoutCookies(output: "ERROR: unsupported URL"))
 }
 

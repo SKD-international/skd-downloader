@@ -26,6 +26,7 @@ For a simple native Mac walkthrough, see the [large-print Mac guide](docs/native
 
 ```bash
 brew tap bonchaloo/tap
+brew trust --cask bonchaloo/tap/skd-downloader
 brew install --cask skd-downloader
 ```
 

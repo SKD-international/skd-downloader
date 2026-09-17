@@ -35,7 +35,7 @@ Paste this full command.
 Then press Return.
 
 ```bash
-if ! command -v brew >/dev/null 2>&1; then /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi; eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"; brew tap Bonchaloo/tap; brew install --cask skd-downloader
+if ! command -v brew >/dev/null 2>&1; then /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi; eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"; brew tap Bonchaloo/tap; brew trust --cask bonchaloo/tap/skd-downloader; brew install --cask skd-downloader
 ```
 
 Wait until Terminal finishes.

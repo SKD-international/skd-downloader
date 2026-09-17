@@ -8,6 +8,7 @@ public enum DownloadMode: String, CaseIterable, Codable, Identifiable, Sendable 
 }
 
 public enum CookieBrowser: String, CaseIterable, Codable, Sendable {
+    case firefox
     case chrome
     case safari
     case none
@@ -16,6 +17,10 @@ public enum CookieBrowser: String, CaseIterable, Codable, Sendable {
         homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
         fileManager: FileManager = .default
     ) -> CookieBrowser? {
+        if browserProfileExists(.firefox, homeDirectory: homeDirectory, fileManager: fileManager) {
+            return .firefox
+        }
+
         if browserProfileExists(.chrome, homeDirectory: homeDirectory, fileManager: fileManager) {
             return .chrome
         }
@@ -33,6 +38,12 @@ public enum CookieBrowser: String, CaseIterable, Codable, Sendable {
         fileManager: FileManager = .default
     ) -> Bool {
         switch browser {
+        case .firefox:
+            return fileManager.fileExists(
+                atPath: homeDirectory
+                    .appendingPathComponent("Library/Application Support/Firefox/Profiles", isDirectory: true)
+                    .path
+            )
         case .chrome:
             return fileManager.fileExists(
                 atPath: homeDirectory

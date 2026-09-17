@@ -40,10 +40,18 @@ The native macOS app is distributed through the SKD tap:
 
 ```bash
 brew tap bonchaloo/tap
+brew trust --cask bonchaloo/tap/skd-downloader
 brew install --cask skd-downloader
 ```
 
 The cask installs the Homebrew `yt-dlp` and `ffmpeg` formula dependencies. The native app resolves those Homebrew-managed tools through absolute `/opt/homebrew` and `/usr/local` paths so GUI launches work even when macOS starts the app with a minimal `PATH`.
+
+Current Homebrew refuses casks from third-party taps until they are trusted, which is
+why `brew trust --cask bonchaloo/tap/skd-downloader` runs before the install.
+
+In Settings → Network, `Cookies Browser` can read Firefox, Chrome, or Safari cookies
+for sites that need a signed-in session. macOS may ask to let SKD Downloader access
+data from other apps; if cookies cannot be read, the download retries without them.
 
 If the project is shipping a deliberately private beta artifact, use the private
 cask mode from the release script and set `HOMEBREW_GITHUB_API_TOKEN` before

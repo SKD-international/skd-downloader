@@ -85,6 +85,7 @@ Users of the private cask need a token:
 
 ```bash
 brew tap bonchaloo/tap
+brew trust --cask bonchaloo/tap/skd-downloader
 export HOMEBREW_GITHUB_API_TOKEN="$(gh auth token)"
 brew install --cask skd-downloader
 ```

@@ -382,6 +382,7 @@ public final class YTDLPEngine: YTDLPEngineClient, @unchecked Sendable {
             "full disk access",
             "database is locked",
             "could not copy",
+            "could not find",
             "failed to decrypt",
             "keychain",
             "unable to open database file",
