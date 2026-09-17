@@ -147,6 +147,8 @@ public enum YTDLPCommandBuilder {
         fileManager: FileManager = .default
     ) -> [String] {
         switch configuration.effectiveCookiesBrowser(homeDirectory: homeDirectory, fileManager: fileManager) {
+        case .firefox:
+            return ["--cookies-from-browser", "firefox"]
         case .chrome:
             return ["--cookies-from-browser", "chrome"]
         case .safari:

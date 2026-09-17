@@ -136,6 +136,7 @@ struct DownloaderSettingsView: View {
 
             Section("Network") {
                 Picker("Cookies Browser", selection: $appState.configuration.cookiesBrowser) {
+                    Text("Firefox").tag(CookieBrowser.firefox)
                     Text("Chrome").tag(CookieBrowser.chrome)
                     Text("Safari").tag(CookieBrowser.safari)
                     Text("None").tag(CookieBrowser.none)

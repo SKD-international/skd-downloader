@@ -40,10 +40,18 @@ The native macOS app is distributed through the SKD tap:
 
 ```bash
 brew tap bonchaloo/tap
+brew trust --cask bonchaloo/tap/skd-downloader
 brew install --cask skd-downloader
 ```
 
 The cask installs the Homebrew `yt-dlp` and `ffmpeg` formula dependencies. The native app resolves those Homebrew-managed tools through absolute `/opt/homebrew` and `/usr/local` paths so GUI launches work even when macOS starts the app with a minimal `PATH`.
+
+Current Homebrew refuses casks from third-party taps until they are trusted, which is
+why `brew trust --cask bonchaloo/tap/skd-downloader` runs before the install.
+
+In Settings → Network, `Cookies Browser` can read Firefox, Chrome, or Safari cookies
+for sites that need a signed-in session. macOS may ask to let SKD Downloader access
+data from other apps; if cookies cannot be read, the download retries without them.
 
 If the project is shipping a deliberately private beta artifact, use the private
 cask mode from the release script and set `HOMEBREW_GITHUB_API_TOKEN` before
@@ -52,6 +60,25 @@ installing. Public casks should not require a token just to audit or load.
 The native cask supports macOS 14 Sonoma and newer, including macOS 15 Sequoia.
 Release artifacts are universal `arm64` + `x86_64` app bundles for Apple
 Silicon and Intel Macs.
+
+## Intel Macs (Homebrew Tier 3)
+
+Homebrew stopped building bottles for macOS on Intel in September 2026, so the
+cask's `yt-dlp` and `ffmpeg` formula dependencies try to compile from source.
+On Intel Macs install the notarized app zip from the GitHub release directly and
+use the official standalone tools, which the app finds in `/usr/local/bin`:
+
+```bash
+curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip
+ditto -xk /tmp/deno.zip /usr/local/bin
+chmod +x /usr/local/bin/yt-dlp /usr/local/bin/deno
+```
+
+Verify each download against the release checksums (`SHA2-256SUMS` for yt-dlp,
+`.sha256sum` for Deno). YouTube needs a current `yt-dlp` plus the Deno JavaScript
+runtime; older builds fail with `HTTP Error 403`. Existing Homebrew `ffmpeg` keeps
+working.
 
 ## What The App Expects
 
