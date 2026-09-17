@@ -1,6 +1,6 @@
 cask "skd-downloader" do
-  version "0.9.0-beta.7"
-  sha256 "baa4e1839206cdeeb165019df0fbccb9bcd10204743a32fa950a883fdcf682b6"
+  version "0.9.0-beta.8"
+  sha256 "0ce763268df33697ded7b659548a53ecbc2cf9039c9d49aa6ec09c1cc951cd9f"
 
   on_arm do
     depends_on formula: "ffmpeg"
